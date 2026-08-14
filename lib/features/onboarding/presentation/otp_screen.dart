@@ -11,6 +11,17 @@ import '../../auth/bloc/auth_event.dart';
 import '../../auth/bloc/auth_state.dart';
 import '../bloc/registration_bloc.dart';
 import '../bloc/registration_event.dart';
+import '../bloc/registration_state.dart';
+
+/// FR-10: maps a resumed draft's settled phase to the screen that owns it.
+/// `address`/`serviceabilityCheckFailed`/`notServiceable` all resolve to
+/// `/address` since that screen already renders the right UI for each.
+String _routeForPhase(RegistrationPhase phase) => switch (phase) {
+      RegistrationPhase.name => '/profile',
+      RegistrationPhase.slot => '/slot',
+      RegistrationPhase.consent => '/consent',
+      _ => '/address',
+    };
 
 /// FR-2.
 class OtpScreen extends StatefulWidget {
@@ -28,12 +39,13 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   void initState() {
     super.initState();
-    _startCountdown();
+    final authState = context.read<AuthBloc>().state;
+    _startCountdown(authState is AuthOtpSent ? authState.resendAfter : 30);
   }
 
-  void _startCountdown() {
+  void _startCountdown(int seconds) {
     _timer?.cancel();
-    setState(() => _secondsRemaining = 30);
+    setState(() => _secondsRemaining = seconds);
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsRemaining <= 1) {
         timer.cancel();
@@ -66,11 +78,23 @@ class _OtpScreenState extends State<OtpScreen> {
           if (state is AuthAuthenticated) {
             final draft = await context.read<DraftStorage>().load();
             if (!context.mounted) return;
-            context.read<RegistrationBloc>().add(DraftRestored(draft));
-            context.go('/profile');
+            final registrationBloc = context.read<RegistrationBloc>();
+            registrationBloc.add(DraftRestored(draft));
+            // `_onDraftRestored` emits exactly one settled (non-transient)
+            // phase, so this resolves to whichever step the restored draft
+            // actually needs next rather than always the blank Name screen.
+            final phase = await registrationBloc.stream
+                .map((s) => s.phase)
+                .firstWhere(
+                  (p) =>
+                      p != RegistrationPhase.checkingServiceability &&
+                      p != RegistrationPhase.loadingSlots,
+                );
+            if (!context.mounted) return;
+            context.go(_routeForPhase(phase));
           }
           if (state is AuthOtpSent) {
-            _startCountdown();
+            _startCountdown(state.resendAfter);
           }
         },
         child: SafeArea(

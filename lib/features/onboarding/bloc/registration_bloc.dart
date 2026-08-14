@@ -28,26 +28,36 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
 
   Future<void> _persist(RegistrationDraft draft) => _draftStorage.save(draft);
 
-  void _onDraftRestored(DraftRestored event, Emitter<RegistrationState> emit) {
+  // FR-10: resume at the first step with missing required data, not a
+  // literal saved "screen index" — simpler and self-healing if a field was
+  // cleared between sessions. Emits exactly one *settled* phase (never
+  // `checkingServiceability`/`loadingSlots`) so callers awaiting the bloc's
+  // stream for a routing decision don't have to filter out transients.
+  Future<void> _onDraftRestored(DraftRestored event, Emitter<RegistrationState> emit) async {
     final draft = event.draft;
     if (draft == null) {
       emit(RegistrationState.initial());
       return;
     }
-    // FR-10: resume at the first step with missing required data, not a
-    // literal saved "screen index" — simpler and self-healing if a field
-    // was cleared between sessions.
-    final RegistrationPhase phase;
     if (draft.name == null || draft.name!.isEmpty) {
-      phase = RegistrationPhase.name;
-    } else if (draft.address == null) {
-      phase = RegistrationPhase.address;
-    } else if (draft.slotId == null) {
-      phase = RegistrationPhase.slot;
-    } else {
-      phase = RegistrationPhase.consent;
+      emit(RegistrationState(draft: draft, phase: RegistrationPhase.name));
+      return;
     }
-    emit(RegistrationState(draft: draft, phase: phase));
+    if (draft.address == null) {
+      emit(RegistrationState(draft: draft, phase: RegistrationPhase.address));
+      return;
+    }
+    if (draft.slotId == null) {
+      if (draft.zoneId == null) {
+        // Serviceability was never confirmed for this address — restart there.
+        emit(RegistrationState(draft: draft, phase: RegistrationPhase.address));
+        return;
+      }
+      emit(RegistrationState(draft: draft, phase: RegistrationPhase.loadingSlots));
+      await _loadSlots(draft.zoneId!, emit);
+      return;
+    }
+    emit(RegistrationState(draft: draft, phase: RegistrationPhase.consent));
   }
 
   Future<void> _onNameSubmitted(NameSubmitted event, Emitter<RegistrationState> emit) async {
@@ -98,6 +108,15 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
       await _loadSlots(result.zoneId!, emit);
     } on ApiException catch (e) {
       emit(state.copyWith(phase: RegistrationPhase.serviceabilityCheckFailed, errorMessage: e.message));
+    } catch (_) {
+      // Malformed/unexpected responses (e.g. a bad fromJson cast) must
+      // still resolve the pending checking-serviceability spinner state.
+      emit(
+        state.copyWith(
+          phase: RegistrationPhase.serviceabilityCheckFailed,
+          errorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
     }
   }
 
@@ -107,6 +126,13 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
       emit(state.copyWith(phase: RegistrationPhase.slot, availableSlots: slots));
     } on ApiException catch (e) {
       emit(state.copyWith(phase: RegistrationPhase.serviceabilityCheckFailed, errorMessage: e.message));
+    } catch (_) {
+      emit(
+        state.copyWith(
+          phase: RegistrationPhase.serviceabilityCheckFailed,
+          errorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
     }
   }
 
@@ -138,6 +164,13 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
       emit(state.copyWith(phase: RegistrationPhase.success, result: result));
     } on ApiException catch (e) {
       emit(state.copyWith(phase: RegistrationPhase.submitFailed, errorMessage: e.message));
+    } catch (_) {
+      emit(
+        state.copyWith(
+          phase: RegistrationPhase.submitFailed,
+          errorMessage: 'Something went wrong. Please try again.',
+        ),
+      );
     }
   }
 }

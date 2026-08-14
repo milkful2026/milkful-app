@@ -5,9 +5,13 @@ import 'package:go_router/go_router.dart';
 import '../bloc/registration_bloc.dart';
 import '../bloc/registration_state.dart';
 
-/// FR-9. No wallet-status retry endpoint exists (MA-100 auto-provision is
-/// explicitly out of scope on the backend — see user/README.md) so a
-/// PENDING wallet is shown as informational only, not with a retry action.
+/// FR-9. No wallet-status polling/retry endpoint exists yet (MA-100
+/// auto-provision is explicitly out of scope on the backend — see
+/// user/README.md), so PENDING and FAILED are both shown as informational
+/// only, not with a working retry action. FAILED is called out distinctly
+/// from PENDING/success per AC-9 ("user never sees silent failure") even
+/// though the backend today always returns PENDING at registration time —
+/// see specs/services/tasks/MA/MA-1/wallet-auto-provision.md FR-2/FR-3.
 class SuccessScreen extends StatelessWidget {
   const SuccessScreen({super.key});
 
@@ -29,6 +33,11 @@ class SuccessScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   if (result?.walletStatus == 'PENDING')
                     const Text("Your Milkful Wallet is being set up.")
+                  else if (result?.walletStatus == 'FAILED')
+                    Text(
+                      'Wallet setup incomplete — contact support if this persists.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    )
                   else if (result != null)
                     const Text('Your Milkful Wallet is ready.'),
                   const SizedBox(height: 32),

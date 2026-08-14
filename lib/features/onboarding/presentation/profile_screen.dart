@@ -22,6 +22,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    final draftName = context.read<RegistrationBloc>().state.draft.name;
+    if (draftName != null) {
+      _controller.text = draftName;
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();

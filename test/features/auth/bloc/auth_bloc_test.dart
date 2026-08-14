@@ -126,6 +126,42 @@ void main() {
     );
 
     blocTest<AuthBloc, AuthState>(
+      'OtpVerifyRequested retried after a previous wrong-code failure still verifies',
+      build: build,
+      seed: () => const AuthOtpVerifyFailure(
+        mobile: '+919876543210',
+        requestId: 'req-1',
+        errorCode: 'OTP_INVALID',
+        message: 'Invalid code',
+      ),
+      act: (bloc) => bloc.add(const OtpVerifyRequested('123456')),
+      expect: () => [
+        const AuthOtpVerifying(mobile: '+919876543210', requestId: 'req-1'),
+        isA<AuthAuthenticated>(),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'OtpVerifyRequested resolves to AuthOtpVerifyFailure, not an uncaught error, '
+      'when token storage fails for a non-API reason',
+      build: () {
+        tokenStorage.saveTokensException = StateError('Keystore unavailable');
+        return build();
+      },
+      seed: () => const AuthOtpSent(
+        mobile: '+919876543210',
+        requestId: 'req-1',
+        expiresIn: 300,
+        resendAfter: 30,
+      ),
+      act: (bloc) => bloc.add(const OtpVerifyRequested('123456')),
+      expect: () => [
+        const AuthOtpVerifying(mobile: '+919876543210', requestId: 'req-1'),
+        isA<AuthOtpVerifyFailure>().having((s) => s.errorCode, 'errorCode', 'UNKNOWN_ERROR'),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
       'AuthReset returns to AuthInitial',
       build: build,
       seed: () => const AuthOtpSendFailure(

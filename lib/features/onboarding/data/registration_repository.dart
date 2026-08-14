@@ -123,6 +123,7 @@ class DioRegistrationRepository implements RegistrationRepository {
     if (address == null) {
       throw const ApiException(errorCode: 'INVALID_DRAFT', message: 'No address in draft');
     }
+    final acceptedAt = DateTime.now().toUtc().toIso8601String();
     final data = await _client.request(
       'POST',
       '${AppConfig.userBaseUrl}/users/register',
@@ -131,20 +132,12 @@ class DioRegistrationRepository implements RegistrationRepository {
         'addresses': [address.toRegisterJson()],
         if (draft.slotId != null) 'preferredSlotId': draft.slotId,
         'consents': [
-          {
-            'type': 'TERMS',
-            'accepted': draft.termsAccepted,
-            'acceptedAt': DateTime.now().toUtc().toIso8601String(),
-          },
-          {
-            'type': 'PRIVACY',
-            'accepted': draft.privacyAccepted,
-            'acceptedAt': DateTime.now().toUtc().toIso8601String(),
-          },
+          {'type': 'TERMS', 'accepted': draft.termsAccepted, 'acceptedAt': acceptedAt},
+          {'type': 'PRIVACY', 'accepted': draft.privacyAccepted, 'acceptedAt': acceptedAt},
           {
             'type': 'PUSH_NOTIFICATIONS',
             'accepted': draft.pushConsent,
-            'acceptedAt': DateTime.now().toUtc().toIso8601String(),
+            'acceptedAt': acceptedAt,
           },
         ],
       },

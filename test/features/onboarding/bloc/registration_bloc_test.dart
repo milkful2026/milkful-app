@@ -214,5 +214,57 @@ void main() {
         isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
       ],
     );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with name, address and a confirmed zone but no slot '
+      'reloads slots and resumes at the slot step',
+      build: () {
+        repository.slots = const [
+          DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM', available: true),
+        ];
+        return build();
+      },
+      act: (bloc) => bloc.add(
+        const DraftRestored(
+          RegistrationDraft(name: 'Priya Sharma', address: _address, zoneId: 'blr-central'),
+        ),
+      ),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.loadingSlots),
+        isA<RegistrationState>()
+            .having((s) => s.phase, 'phase', RegistrationPhase.slot)
+            .having((s) => s.availableSlots.length, 'slot count', 1),
+      ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with name, address and no zone (serviceability never '
+      'confirmed) resumes at the address step rather than crashing on a null zoneId',
+      build: build,
+      act: (bloc) => bloc.add(
+        const DraftRestored(RegistrationDraft(name: 'Priya Sharma', address: _address)),
+      ),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
+      ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with name, address and slot already chosen resumes at consent',
+      build: build,
+      act: (bloc) => bloc.add(
+        const DraftRestored(
+          RegistrationDraft(
+            name: 'Priya Sharma',
+            address: _address,
+            zoneId: 'blr-central',
+            slotId: 'morning-6-8',
+          ),
+        ),
+      ),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.consent),
+      ],
+    );
   });
 }

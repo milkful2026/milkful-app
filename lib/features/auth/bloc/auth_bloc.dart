@@ -52,15 +52,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     OtpVerifyRequested event,
     Emitter<AuthState> emit,
   ) async {
-    final current = state;
-    if (current is! AuthOtpSent) return;
+    final (mobile, requestId) = switch (state) {
+      AuthOtpSent(:final mobile, :final requestId) => (mobile, requestId),
+      AuthOtpVerifyFailure(:final mobile, :final requestId) => (mobile, requestId),
+      _ => (null, null),
+    };
+    if (mobile == null || requestId == null) return;
 
-    emit(AuthOtpVerifying(mobile: current.mobile, requestId: current.requestId));
+    emit(AuthOtpVerifying(mobile: mobile, requestId: requestId));
     try {
       final tokens = await _authRepository.verifyOtp(
-        mobile: current.mobile,
+        mobile: mobile,
         otp: event.otp,
-        requestId: current.requestId,
+        requestId: requestId,
       );
       await _tokenStorage.saveTokens(
         accessToken: tokens.accessToken,
@@ -71,10 +75,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } on ApiException catch (e) {
       emit(
         AuthOtpVerifyFailure(
-          mobile: current.mobile,
-          requestId: current.requestId,
+          mobile: mobile,
+          requestId: requestId,
           errorCode: e.errorCode,
           message: e.message,
+        ),
+      );
+    } catch (_) {
+      // Non-API failures (e.g. secure-storage write errors, malformed
+      // token responses) must still resolve the pending spinner state.
+      emit(
+        AuthOtpVerifyFailure(
+          mobile: mobile,
+          requestId: requestId,
+          errorCode: 'UNKNOWN_ERROR',
+          message: 'Something went wrong. Please try again.',
         ),
       );
     }

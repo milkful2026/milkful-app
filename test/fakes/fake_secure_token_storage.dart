@@ -8,12 +8,18 @@ class FakeSecureTokenStorage implements SecureTokenStorage {
   String? refreshToken;
   DateTime? accessTokenExpiresAt;
 
+  /// Simulates a real, documented flutter_secure_storage failure mode
+  /// (e.g. a PlatformException on some Android OEMs/Keystore states) —
+  /// deliberately not an ApiException, to exercise the non-API error path.
+  Object? saveTokensException;
+
   @override
   Future<void> saveTokens({
     required String accessToken,
     required String refreshToken,
     required DateTime accessTokenExpiresAt,
   }) async {
+    if (saveTokensException != null) throw saveTokensException!;
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
     this.accessTokenExpiresAt = accessTokenExpiresAt;
