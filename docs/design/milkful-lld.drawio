@@ -1,0 +1,494 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="1. Order Placement (Saga)" id="lld1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2050" pageHeight="1046" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t_lld1" value="1. Order Placement (Saga)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontStyle=1;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="2010" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_U" value="Customer App" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_GW" value="API Gateway" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="240" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_O" value="Order Service
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_SF" value="Step Functions
+(Order Saga)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="640" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_I" value="Inventory Svc
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="840" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_P" value="Payment Svc
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_PG" value="Payment Gateway" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_EB" value="EventBridge" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_Q" value="SQS queues" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_ll_N" value="Notification
+(Lambda)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1840" y="50" width="150" height="936" as="geometry" />
+        </mxCell>
+        <mxCell id="lld1_m0" value="POST /orders (cart) + JWT" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="150" as="sourcePoint" />
+            <mxPoint x="315" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m1" value="Create order (idempotency-key)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="204" as="sourcePoint" />
+            <mxPoint x="515" y="204" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m2" value="Start Order Saga" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="258" as="sourcePoint" />
+            <mxPoint x="715" y="258" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m3" value="Reserve stock" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="715" y="312" as="sourcePoint" />
+            <mxPoint x="915" y="312" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m4" value="Reserved OK" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="915" y="366" as="sourcePoint" />
+            <mxPoint x="715" y="366" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m5" value="Charge (wallet-first + gateway)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="715" y="420" as="sourcePoint" />
+            <mxPoint x="1115" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m6" value="Charge remainder (UPI/card)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1115" y="474" as="sourcePoint" />
+            <mxPoint x="1315" y="474" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m7" value="Success (ref)" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="528" as="sourcePoint" />
+            <mxPoint x="1115" y="528" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m8" value="PaymentConfirmed" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1115" y="582" as="sourcePoint" />
+            <mxPoint x="715" y="582" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m9" value="Confirm order (or compensate)" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="715" y="636" as="sourcePoint" />
+            <mxPoint x="515" y="636" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m10" value="Publish OrderConfirmed" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="690" as="sourcePoint" />
+            <mxPoint x="1515" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m11" value="Rules route to queues" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="744" as="sourcePoint" />
+            <mxPoint x="1715" y="744" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m12" value="notification-events-q (poll)" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1715" y="798" as="sourcePoint" />
+            <mxPoint x="1915" y="798" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld1_m13" value="Push/SMS confirmation + ETA" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1915" y="852" as="sourcePoint" />
+            <mxPoint x="115" y="852" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="2. Subscription Mgmt" id="lld2">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2250" pageHeight="938" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t_lld2" value="2. Subscription Mgmt" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontStyle=1;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="2210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_U" value="Customer App" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_GW" value="API Gateway" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="240" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_S" value="Subscription Svc
+(Lambda)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_DB" value="subscriptions db" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="640" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_SCH" value="EventBridge Sched" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="840" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_SFN" value="Step Functions" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_O" value="Order Service
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_W" value="Wallet
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_EB" value="EventBridge" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_Q" value="SQS" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1840" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_ll_N" value="Notification
+(Lambda)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="2040" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld2_m0" value="Create subscription" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="150" as="sourcePoint" />
+            <mxPoint x="315" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m1" value="POST /subscriptions" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="204" as="sourcePoint" />
+            <mxPoint x="515" y="204" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m2" value="Save (ACTIVE)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="258" as="sourcePoint" />
+            <mxPoint x="715" y="258" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m3" value="Active" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="312" as="sourcePoint" />
+            <mxPoint x="115" y="312" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m4" value="Daily trigger (pre-cutoff)" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="915" y="366" as="sourcePoint" />
+            <mxPoint x="1115" y="366" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m5" value="Get due subscriptions" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1115" y="420" as="sourcePoint" />
+            <mxPoint x="515" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m6" value="Publish SubscriptionOrderDue" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="474" as="sourcePoint" />
+            <mxPoint x="1715" y="474" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m7" value="order-events-q (rule)" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1715" y="528" as="sourcePoint" />
+            <mxPoint x="1915" y="528" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m8" value="poll -&gt; generate orders" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1915" y="582" as="sourcePoint" />
+            <mxPoint x="1315" y="582" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m9" value="Auto-debit wallet" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="636" as="sourcePoint" />
+            <mxPoint x="1515" y="636" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m10" value="Order created / low-balance" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="690" as="sourcePoint" />
+            <mxPoint x="2115" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld2_m11" value="Notify" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="2115" y="744" as="sourcePoint" />
+            <mxPoint x="115" y="744" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="3. Inventory Update" id="lld3">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1850" pageHeight="938" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t_lld3" value="3. Inventory Update" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontStyle=1;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="1810" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_SF" value="Order Saga" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_I" value="Inventory Svc
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="240" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_DB" value="inventory db" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_R" value="Redis" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="640" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_EB" value="EventBridge" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="840" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_Q" value="catalog-events-q" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_C" value="Catalog Svc
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_OS" value="OpenSearch" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_ll_A" value="Admin Panel" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="50" width="150" height="828" as="geometry" />
+        </mxCell>
+        <mxCell id="lld3_m0" value="Reserve(items)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="150" as="sourcePoint" />
+            <mxPoint x="315" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m1" value="reserved += qty (own DB)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="204" as="sourcePoint" />
+            <mxPoint x="515" y="204" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m2" value="Update cached stock" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="258" as="sourcePoint" />
+            <mxPoint x="715" y="258" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m3" value="Reserved" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="312" as="sourcePoint" />
+            <mxPoint x="115" y="312" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m4" value="Commit on payment success" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="366" as="sourcePoint" />
+            <mxPoint x="315" y="366" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m5" value="on_hand -= qty" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="420" as="sourcePoint" />
+            <mxPoint x="515" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m6" value="Publish StockChanged" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="474" as="sourcePoint" />
+            <mxPoint x="915" y="474" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m7" value="route (rule)" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="915" y="528" as="sourcePoint" />
+            <mxPoint x="1115" y="528" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m8" value="poll" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1115" y="582" as="sourcePoint" />
+            <mxPoint x="1315" y="582" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m9" value="Update product index" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="636" as="sourcePoint" />
+            <mxPoint x="1515" y="636" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m10" value="Manual adjust (+audit)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1715" y="690" as="sourcePoint" />
+            <mxPoint x="315" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld3_m11" value="adjust + audit log" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="744" as="sourcePoint" />
+            <mxPoint x="515" y="744" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="4. Delivery Assignment" id="lld4">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t_lld4" value="4. Delivery Assignment" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontStyle=1;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="1810" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_EB" value="EventBridge" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_Q" value="delivery-events-q" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="240" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_D" value="Delivery Svc
+(Fargate)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_DB" value="delivery db" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="640" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_LOC" value="Location Service" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="840" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_DDB" value="DynamoDB (tracking)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_DP" value="Partner App" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_N" value="Notification
+(Lambda)" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_ll_U" value="Customer App" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=0;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontStyle=1;size=44;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="50" width="150" height="990" as="geometry" />
+        </mxCell>
+        <mxCell id="lld4_m0" value="OrderConfirmed (rule)" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="150" as="sourcePoint" />
+            <mxPoint x="315" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m1" value="poll" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="204" as="sourcePoint" />
+            <mxPoint x="515" y="204" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m2" value="Fetch orders by zone/slot" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="258" as="sourcePoint" />
+            <mxPoint x="715" y="258" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m3" value="Optimize routes" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="312" as="sourcePoint" />
+            <mxPoint x="915" y="312" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m4" value="Optimized routes" style="html=1;endArrow=open;dashed=1;strokeColor=#b85450;fontSize=10;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="915" y="366" as="sourcePoint" />
+            <mxPoint x="515" y="366" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m5" value="Save delivery + route" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="420" as="sourcePoint" />
+            <mxPoint x="715" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m6" value="Live tracking (TTL)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="474" as="sourcePoint" />
+            <mxPoint x="1115" y="474" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m7" value="Assign run to partner" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="528" as="sourcePoint" />
+            <mxPoint x="1515" y="528" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m8" value="New delivery run" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="582" as="sourcePoint" />
+            <mxPoint x="1315" y="582" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m9" value="Out for delivery + GPS" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="636" as="sourcePoint" />
+            <mxPoint x="515" y="636" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m10" value="Update location/status" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="690" as="sourcePoint" />
+            <mxPoint x="1115" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m11" value="DeliveryStatusChanged" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="744" as="sourcePoint" />
+            <mxPoint x="1515" y="744" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m12" value="Out for delivery + ETA" style="html=1;endArrow=open;dashed=0;strokeColor=#2d6a4f;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1515" y="798" as="sourcePoint" />
+            <mxPoint x="1715" y="798" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m13" value="Delivered + proof (OTP/photo)" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1315" y="852" as="sourcePoint" />
+            <mxPoint x="515" y="852" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lld4_m14" value="Mark DELIVERED" style="html=1;endArrow=block;dashed=0;strokeColor=#333333;fontSize=10;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="515" y="906" as="sourcePoint" />
+            <mxPoint x="715" y="906" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
