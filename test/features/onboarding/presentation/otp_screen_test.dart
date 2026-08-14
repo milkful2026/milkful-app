@@ -10,6 +10,7 @@ import 'package:milkful_app/features/onboarding/presentation/otp_screen.dart';
 
 import '../../../fakes/fake_auth_repository.dart';
 import '../../../fakes/fake_draft_storage.dart';
+import '../../../fakes/fake_profile_repository.dart';
 import '../../../fakes/fake_registration_repository.dart';
 import '../../../fakes/fake_secure_token_storage.dart';
 
@@ -25,7 +26,11 @@ void main() {
   // widget's timer, via dispose()) don't leak into the next test.
   Future<void> pumpOtp(WidgetTester tester) async {
     authRepository = FakeAuthRepository();
-    authBloc = AuthBloc(authRepository: authRepository, tokenStorage: FakeSecureTokenStorage());
+    authBloc = AuthBloc(
+      authRepository: authRepository,
+      tokenStorage: FakeSecureTokenStorage(),
+      profileRepository: FakeProfileRepository(),
+    );
     addTearDown(() => authBloc.close());
     // Drive the bloc into AuthOtpSent through a real event rather than
     // reaching for Bloc.emit (protected, not callable from a test).

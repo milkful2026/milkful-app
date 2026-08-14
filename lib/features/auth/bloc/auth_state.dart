@@ -1,7 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-import '../models/token_bundle.dart';
-
 sealed class AuthState extends Equatable {
   const AuthState();
 
@@ -11,6 +9,14 @@ sealed class AuthState extends Equatable {
 
 class AuthInitial extends AuthState {
   const AuthInitial();
+}
+
+/// MA-21 FR-3: shown briefly at app start while a stored session is being
+/// checked/silently refreshed — the router treats this as "not yet
+/// decided" rather than redirecting to the entry screen, avoiding a flash
+/// of Welcome before the check resolves.
+class AuthBootstrapping extends AuthState {
+  const AuthBootstrapping();
 }
 
 class AuthOtpSending extends AuthState {
@@ -94,11 +100,29 @@ class AuthOtpVerifyFailure extends AuthState {
   List<Object?> get props => [mobile, requestId, errorCode, message];
 }
 
+/// Tokens themselves live only in SecureTokenStorage (never repeated
+/// here) — nothing in the UI needs the raw token value again once
+/// ApiClient's interceptor can read it from storage on each request.
+/// `accountType` is populated from GET /users/me where possible (MA-21
+/// FR-4) but is optional: a failed profile lookup after a successful
+/// login/registration must never block reaching Home, so this state can
+/// legitimately carry `accountType: null`.
 class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated(this.tokens);
+  const AuthAuthenticated({this.accountType});
 
-  final TokenBundle tokens;
+  final String? accountType;
 
   @override
-  List<Object?> get props => [tokens];
+  List<Object?> get props => [accountType];
+}
+
+/// MA-21 FR-1's inverse of AuthUserAlreadyExists — the standalone /login
+/// entry's mobile number has no matching account.
+class AuthUserNotFound extends AuthState {
+  const AuthUserNotFound(this.mobile);
+
+  final String mobile;
+
+  @override
+  List<Object?> get props => [mobile];
 }

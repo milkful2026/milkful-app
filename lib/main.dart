@@ -7,7 +7,9 @@ import 'core/storage/draft_storage.dart';
 import 'core/storage/secure_token_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/bloc/auth_bloc.dart';
+import 'features/auth/bloc/auth_event.dart';
 import 'features/auth/data/auth_repository.dart';
+import 'features/auth/data/profile_repository.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
 import 'features/onboarding/data/registration_repository.dart';
 
@@ -29,7 +31,16 @@ class MilkfulApp extends StatelessWidget {
     // Authorization header is added; that's correct, not an error case.
     final apiClient = ApiClient(accessTokenProvider: tokenStorage.readAccessToken);
     final authRepository = DioAuthRepository(apiClient);
+    final profileRepository = DioProfileRepository(apiClient);
     final registrationRepository = DioRegistrationRepository(apiClient);
+
+    final authBloc = AuthBloc(
+      authRepository: authRepository,
+      tokenStorage: tokenStorage,
+      profileRepository: profileRepository,
+      // MA-21 FR-3: checks for a stored session once at startup, before
+      // the router makes its first routing decision.
+    )..add(const SessionBootstrapRequested());
 
     return MultiRepositoryProvider(
       providers: [
@@ -38,9 +49,7 @@ class MilkfulApp extends StatelessWidget {
       ],
       child: MultiBlocProvider(
         providers: [
-          BlocProvider(
-            create: (_) => AuthBloc(authRepository: authRepository, tokenStorage: tokenStorage),
-          ),
+          BlocProvider<AuthBloc>.value(value: authBloc),
           BlocProvider(
             create: (_) => RegistrationBloc(
               repository: registrationRepository,
@@ -51,7 +60,7 @@ class MilkfulApp extends StatelessWidget {
         child: MaterialApp.router(
           title: 'Milkful',
           theme: AppTheme.light,
-          routerConfig: appRouter,
+          routerConfig: buildAppRouter(authBloc),
         ),
       ),
     );
