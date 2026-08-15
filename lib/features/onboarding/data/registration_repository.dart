@@ -3,16 +3,25 @@ import '../../../core/network/api_client.dart';
 import '../models/registration_draft.dart';
 
 class DeliverySlot {
-  const DeliverySlot({required this.id, required this.label, required this.available});
+  const DeliverySlot({required this.id, required this.label, this.available = true});
 
   final String id;
   final String label;
   final bool available;
 
+  /// `available` is optional: User Service's own `/delivery/slots`
+  /// response includes it, but Inventory's embedded `slots` (inside
+  /// `/v1/serviceability/check`'s response, parsed here via
+  /// [ServiceabilityResult.fromJson] even though the app never actually
+  /// reads that particular field — see [RegistrationRepository]'s
+  /// docstring) never carries it at all — a slot present in Inventory's
+  /// zone config with no explicit flag is reasonably "available" by
+  /// default. Found by live-testing the real serviceability response,
+  /// not by any fake (fakes were written to the assumed-required shape).
   factory DeliverySlot.fromJson(Map<String, dynamic> json) => DeliverySlot(
         id: json['id'] as String,
         label: json['label'] as String,
-        available: json['available'] as bool,
+        available: json['available'] as bool? ?? true,
       );
 }
 

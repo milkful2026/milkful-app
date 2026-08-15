@@ -9,10 +9,9 @@ import 'registration_state.dart';
 
 class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
   RegistrationBloc({
-    required RegistrationRepository repository,
+    required this._repository,
     required DraftStorage draftStorage,
-  })  : _repository = repository,
-        _draftStorage = draftStorage,
+  })  : _draftStorage = draftStorage,
         super(RegistrationState.initial()) {
     on<DraftRestored>(_onDraftRestored);
     on<NameSubmitted>(_onNameSubmitted);

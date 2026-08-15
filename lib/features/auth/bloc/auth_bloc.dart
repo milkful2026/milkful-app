@@ -9,12 +9,10 @@ import 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc({
-    required AuthRepository authRepository,
+    required this._authRepository,
     required SecureTokenStorage tokenStorage,
-    required ProfileRepository profileRepository,
-  })  : _authRepository = authRepository,
-        _tokenStorage = tokenStorage,
-        _profileRepository = profileRepository,
+    required this._profileRepository,
+  })  : _tokenStorage = tokenStorage,
         super(const AuthInitial()) {
     on<OtpSendRequested>(_onOtpSendRequested);
     on<OtpResendRequested>(_onOtpSendRequested);
