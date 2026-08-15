@@ -20,10 +20,6 @@ class OtpSendResult {
       );
 }
 
-/// Registration-flow auth calls only (MA-1 scope) — the port MA-21's login
-/// flow extends with sendLoginOtp/verifyLoginOtp/refresh/logout, in its own
-/// PR. Kept in `features/auth/` (not `onboarding/`) precisely because that
-/// extension reuses this exact interface, per both specs' technical design.
 abstract class AuthRepository {
   Future<OtpSendResult> sendOtp(String mobile);
 
@@ -32,6 +28,27 @@ abstract class AuthRepository {
     required String otp,
     required String requestId,
   });
+
+  /// MA-21 FR-1.
+  Future<OtpSendResult> sendLoginOtp(String mobile);
+
+  /// MA-21 FR-2. Response has no `isNewUser` (identity-auth's
+  /// login_otp_verify_handler.py omits it entirely, not just sets it
+  /// false) — TokenBundle.fromJson's already-nullable field handles this
+  /// with no change needed.
+  Future<TokenBundle> verifyLoginOtp({
+    required String mobile,
+    required String otp,
+    required String requestId,
+  });
+
+  /// MA-21 FR-3 (silent refresh).
+  Future<TokenBundle> refreshToken(String refreshToken);
+
+  /// MA-21 FR-5. The route is Cognito-JWT-authorized; ApiClient's shared
+  /// token interceptor attaches the Bearer access token automatically —
+  /// nothing special needed here.
+  Future<void> logout(String refreshToken);
 }
 
 class DioAuthRepository implements AuthRepository {
@@ -61,5 +78,48 @@ class DioAuthRepository implements AuthRepository {
       body: {'mobile': mobile, 'otp': otp, 'requestId': requestId},
     );
     return TokenBundle.fromJson(data);
+  }
+
+  @override
+  Future<OtpSendResult> sendLoginOtp(String mobile) async {
+    final data = await _client.request(
+      'POST',
+      '${AppConfig.identityAuthBaseUrl}/v1/auth/login/otp/send',
+      body: {'mobile': mobile},
+    );
+    return OtpSendResult.fromJson(data);
+  }
+
+  @override
+  Future<TokenBundle> verifyLoginOtp({
+    required String mobile,
+    required String otp,
+    required String requestId,
+  }) async {
+    final data = await _client.request(
+      'POST',
+      '${AppConfig.identityAuthBaseUrl}/v1/auth/login/otp/verify',
+      body: {'mobile': mobile, 'otp': otp, 'requestId': requestId},
+    );
+    return TokenBundle.fromJson(data);
+  }
+
+  @override
+  Future<TokenBundle> refreshToken(String refreshToken) async {
+    final data = await _client.request(
+      'POST',
+      '${AppConfig.identityAuthBaseUrl}/v1/auth/token/refresh',
+      body: {'refreshToken': refreshToken},
+    );
+    return TokenBundle.fromJson(data);
+  }
+
+  @override
+  Future<void> logout(String refreshToken) async {
+    await _client.request(
+      'POST',
+      '${AppConfig.identityAuthBaseUrl}/v1/auth/logout',
+      body: {'refreshToken': refreshToken},
+    );
   }
 }

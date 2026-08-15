@@ -12,6 +12,7 @@ class FakeSecureTokenStorage implements SecureTokenStorage {
   /// (e.g. a PlatformException on some Android OEMs/Keystore states) —
   /// deliberately not an ApiException, to exercise the non-API error path.
   Object? saveTokensException;
+  Object? readAccessTokenExpiresAtException;
 
   @override
   Future<void> saveTokens({
@@ -32,7 +33,10 @@ class FakeSecureTokenStorage implements SecureTokenStorage {
   Future<String?> readRefreshToken() async => refreshToken;
 
   @override
-  Future<DateTime?> readAccessTokenExpiresAt() async => accessTokenExpiresAt;
+  Future<DateTime?> readAccessTokenExpiresAt() async {
+    if (readAccessTokenExpiresAtException != null) throw readAccessTokenExpiresAtException!;
+    return accessTokenExpiresAt;
+  }
 
   @override
   Future<void> clear() async {

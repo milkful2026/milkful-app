@@ -1,0 +1,98 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
+import 'package:milkful_app/features/auth/bloc/auth_event.dart';
+import 'package:milkful_app/features/auth/models/user_profile.dart';
+import 'package:milkful_app/features/home/presentation/home_screen.dart';
+
+import '../../../fakes/fake_auth_repository.dart';
+import '../../../fakes/fake_profile_repository.dart';
+import '../../../fakes/fake_secure_token_storage.dart';
+
+void main() {
+  late FakeAuthRepository authRepository;
+  late FakeSecureTokenStorage tokenStorage;
+  late AuthBloc authBloc;
+
+  Future<void> pumpHome(WidgetTester tester) async {
+    authRepository = FakeAuthRepository();
+    tokenStorage = FakeSecureTokenStorage()
+      ..accessToken = 'stored-access'
+      ..refreshToken = 'stored-refresh';
+    authBloc = AuthBloc(
+      authRepository: authRepository,
+      tokenStorage: tokenStorage,
+      profileRepository: FakeProfileRepository(),
+    );
+    addTearDown(() => authBloc.close());
+    await tester.pumpWidget(
+      BlocProvider<AuthBloc>.value(
+        value: authBloc,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+  }
+
+  testWidgets('B2B account shows the role indicator chip', (tester) async {
+    authRepository = FakeAuthRepository();
+    tokenStorage = FakeSecureTokenStorage()
+      ..refreshToken = 'stored-refresh'
+      ..accessToken = 'stored-access'
+      ..accessTokenExpiresAt = DateTime.now().add(const Duration(hours: 1));
+    authBloc = AuthBloc(
+      authRepository: authRepository,
+      tokenStorage: tokenStorage,
+      profileRepository: FakeProfileRepository(
+        profile: const UserProfile(
+          userId: 'user-1',
+          name: 'B2B Buyer',
+          mobile: '+919876543210',
+          accountType: 'B2B',
+          defaultAddressId: 'addr-1',
+        ),
+      ),
+    );
+    addTearDown(() => authBloc.close());
+    // SessionBootstrapRequested is the real path that resolves
+    // accountType via GET /users/me — the same one app startup uses.
+    authBloc.add(const SessionBootstrapRequested());
+    await tester.pumpWidget(
+      BlocProvider<AuthBloc>.value(
+        value: authBloc,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('B2B account'), findsOneWidget);
+  });
+
+  testWidgets('Cancel in the logout dialog leaves the session intact', (tester) async {
+    await pumpHome(tester);
+
+    await tester.tap(find.byKey(const Key('logout-action')));
+    await tester.pumpAndSettle();
+    expect(find.text('Log out?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.loggedOutWith, isEmpty);
+    expect(tokenStorage.accessToken, 'stored-access');
+  });
+
+  testWidgets('Confirming in the logout dialog logs out and clears storage', (tester) async {
+    await pumpHome(tester);
+
+    await tester.tap(find.byKey(const Key('logout-action')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, 'Log out'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.loggedOutWith, ['stored-refresh']);
+    expect(tokenStorage.accessToken, isNull);
+  });
+}

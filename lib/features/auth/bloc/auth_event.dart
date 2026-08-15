@@ -42,3 +42,47 @@ class OtpVerifyRequested extends AuthEvent {
 class AuthReset extends AuthEvent {
   const AuthReset();
 }
+
+/// MA-21 FR-1: standalone /login entry, or the signup screen's "Log in"
+/// tap (which already knows the mobile — see login_otp_send_handler.py's
+/// USER_EXISTS/USER_NOT_FOUND gate being the inverse of registration's).
+class LoginOtpSendRequested extends AuthEvent {
+  const LoginOtpSendRequested(this.mobile);
+
+  final String mobile;
+
+  @override
+  List<Object?> get props => [mobile];
+}
+
+class LoginOtpResendRequested extends AuthEvent {
+  const LoginOtpResendRequested(this.mobile);
+
+  final String mobile;
+
+  @override
+  List<Object?> get props => [mobile];
+}
+
+/// MA-21 FR-2.
+class LoginOtpVerifyRequested extends AuthEvent {
+  const LoginOtpVerifyRequested(this.otp);
+
+  final String otp;
+
+  @override
+  List<Object?> get props => [otp];
+}
+
+/// MA-21 FR-3: dispatched once at app start (see main.dart) — checks for a
+/// stored session, silently refreshes an expired access token, and
+/// resolves accountType via GET /users/me before the router decides
+/// between landing on Home or the entry screen.
+class SessionBootstrapRequested extends AuthEvent {
+  const SessionBootstrapRequested();
+}
+
+/// MA-21 FR-5.
+class LogoutRequested extends AuthEvent {
+  const LogoutRequested();
+}
