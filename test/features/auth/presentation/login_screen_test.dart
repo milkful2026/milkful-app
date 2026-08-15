@@ -87,6 +87,22 @@ void main() {
     expect(router.state.matchedLocation, '/login');
   });
 
+  testWidgets('a non-USER_NOT_FOUND send failure shows its error message', (tester) async {
+    await pumpLogin(tester);
+    authRepository.sendLoginOtpException = const ApiException(
+      errorCode: 'RATE_LIMIT_EXCEEDED',
+      message: 'Too many attempts',
+    );
+
+    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Too many attempts'), findsOneWidget);
+    expect(find.text('Sign up'), findsNothing);
+  });
+
   testWidgets('tapping Sign up from the not-found state navigates to /signup', (tester) async {
     await pumpLogin(tester);
     authRepository.sendLoginOtpException = const ApiException(

@@ -21,15 +21,15 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final _controller = TextEditingController();
 
-  // MA-21: registration's OTP send and the "Log in" link's login OTP send
-  // both land in the same AuthOtpSent/AuthOtpSending states (see
-  // auth_bloc.dart's shared OTP-state design) — a BlocBuilder narrowed to
-  // `state is AuthUserAlreadyExists` loses that fact the moment sending
-  // starts (the state moves on to AuthOtpSending), so these two flags are
-  // tracked locally via the listener instead of re-derived from the
-  // bloc's current state on every build.
+  // MA-21: `AuthUserAlreadyExists` doesn't persist once the "Log in" link
+  // triggers a login OTP send (state moves on to AuthOtpSending), so this
+  // one flag is still tracked locally via the listener. Which *flow* a
+  // subsequent AuthOtpSending/AuthOtpSent/AuthOtpSendFailure belongs to is
+  // no longer guessed from a second local flag — it's read directly off
+  // each state's own `flow` field (see auth_state.dart's OtpFlow), so a
+  // failed login send can't be silently dropped, and a concurrent
+  // registration send can't cross-wire with an in-flight login send.
   bool _userAlreadyExists = false;
-  bool _loggingIn = false;
 
   bool get _isValid => RegExp(r'^\d{10}$').hasMatch(_controller.text);
 
@@ -49,7 +49,7 @@ class _SignupScreenState extends State<SignupScreen> {
             setState(() => _userAlreadyExists = true);
           }
           if (state is AuthOtpSent) {
-            context.go(_loggingIn ? '/login/otp' : '/otp', extra: state.mobile);
+            context.go(state.flow == OtpFlow.login ? '/login/otp' : '/otp', extra: state.mobile);
           }
         },
         child: SafeArea(
@@ -87,27 +87,41 @@ class _SignupScreenState extends State<SignupScreen> {
                 if (_userAlreadyExists)
                   BlocBuilder<AuthBloc, AuthState>(
                     builder: (context, state) {
-                      final loggingIn = _loggingIn && state is AuthOtpSending;
+                      final loggingIn = state is AuthOtpSending && state.flow == OtpFlow.login;
+                      final loginFailure =
+                          state is AuthOtpSendFailure && state.flow == OtpFlow.login
+                              ? state
+                              : null;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Expanded(child: Text('Already registered?')),
-                            if (loggingIn)
-                              const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            else
-                              TextButton(
-                                onPressed: () {
-                                  setState(() => _loggingIn = true);
-                                  context
-                                      .read<AuthBloc>()
-                                      .add(LoginOtpSendRequested('+91${_controller.text}'));
-                                },
-                                child: const Text('Log in'),
+                            Row(
+                              children: [
+                                const Expanded(child: Text('Already registered?')),
+                                if (loggingIn)
+                                  const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                else
+                                  TextButton(
+                                    onPressed: () => context
+                                        .read<AuthBloc>()
+                                        .add(LoginOtpSendRequested('+91${_controller.text}')),
+                                    child: const Text('Log in'),
+                                  ),
+                              ],
+                            ),
+                            if (loginFailure != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  loginFailure.message,
+                                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                ),
                               ),
                           ],
                         ),
@@ -117,7 +131,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 else
                   BlocBuilder<AuthBloc, AuthState>(
                     builder: (context, state) {
-                      if (state is! AuthOtpSendFailure) return const SizedBox.shrink();
+                      if (state is! AuthOtpSendFailure || state.flow != OtpFlow.registration) {
+                        return const SizedBox.shrink();
+                      }
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Text(
@@ -129,22 +145,26 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 BlocBuilder<AuthBloc, AuthState>(
                   builder: (context, state) {
-                    final sending = state is AuthOtpSending && !_loggingIn;
+                    // Disabled whenever *any* OTP send is in flight — not just a
+                    // registration one — so a concurrent tap here can't race an
+                    // in-flight login send and cross-wire the two flows' requestIds.
+                    // Spinner only shown for the registration send itself; an
+                    // in-flight login send already has its own spinner above.
+                    final anySending = state is AuthOtpSending;
+                    final registrationSending =
+                        state is AuthOtpSending && state.flow == OtpFlow.registration;
                     return SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: !_isValid || sending
+                        onPressed: !_isValid || anySending
                             ? null
                             : () {
-                                setState(() {
-                                  _loggingIn = false;
-                                  _userAlreadyExists = false;
-                                });
+                                setState(() => _userAlreadyExists = false);
                                 context
                                     .read<AuthBloc>()
                                     .add(OtpSendRequested('+91${_controller.text}'));
                               },
-                        child: sending
+                        child: registrationSending
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,

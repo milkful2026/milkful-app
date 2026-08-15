@@ -28,16 +28,17 @@ void main() {
         );
 
     blocTest<AuthBloc, AuthState>(
-      'OtpSendRequested emits sending then sent on success',
+      'OtpSendRequested emits sending then sent (registration flow) on success',
       build: build,
       act: (bloc) => bloc.add(const OtpSendRequested('+919876543210')),
       expect: () => [
-        const AuthOtpSending('+919876543210'),
+        const AuthOtpSending('+919876543210', flow: OtpFlow.registration),
         const AuthOtpSent(
           mobile: '+919876543210',
           requestId: 'req-1',
           expiresIn: 300,
           resendAfter: 30,
+          flow: OtpFlow.registration,
         ),
       ],
     );
@@ -53,13 +54,13 @@ void main() {
       },
       act: (bloc) => bloc.add(const OtpSendRequested('+919876543210')),
       expect: () => [
-        const AuthOtpSending('+919876543210'),
+        const AuthOtpSending('+919876543210', flow: OtpFlow.registration),
         const AuthUserAlreadyExists('+919876543210'),
       ],
     );
 
     blocTest<AuthBloc, AuthState>(
-      'OtpSendRequested with a non-USER_EXISTS error emits AuthOtpSendFailure',
+      'OtpSendRequested with a non-USER_EXISTS error emits AuthOtpSendFailure flagged registration',
       build: () {
         repository.sendOtpException = const ApiException(
           errorCode: 'RATE_LIMIT_EXCEEDED',
@@ -69,11 +70,12 @@ void main() {
       },
       act: (bloc) => bloc.add(const OtpSendRequested('+919876543210')),
       expect: () => [
-        const AuthOtpSending('+919876543210'),
+        const AuthOtpSending('+919876543210', flow: OtpFlow.registration),
         const AuthOtpSendFailure(
           mobile: '+919876543210',
           errorCode: 'RATE_LIMIT_EXCEEDED',
           message: 'Too many attempts',
+          flow: OtpFlow.registration,
         ),
       ],
     );
@@ -86,6 +88,7 @@ void main() {
         requestId: 'req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.registration,
       ),
       act: (bloc) => bloc.add(const OtpVerifyRequested('123456')),
       expect: () => [
@@ -115,6 +118,7 @@ void main() {
         requestId: 'req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.registration,
       ),
       act: (bloc) => bloc.add(const OtpVerifyRequested('000000')),
       expect: () => [
@@ -163,6 +167,7 @@ void main() {
         requestId: 'req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.registration,
       ),
       act: (bloc) => bloc.add(const OtpVerifyRequested('123456')),
       expect: () => [
@@ -178,6 +183,7 @@ void main() {
         mobile: '+919876543210',
         errorCode: 'X',
         message: 'x',
+        flow: OtpFlow.registration,
       ),
       act: (bloc) => bloc.add(const AuthReset()),
       expect: () => [const AuthInitial()],
@@ -186,16 +192,17 @@ void main() {
     // --- MA-21: login OTP send/verify ---
 
     blocTest<AuthBloc, AuthState>(
-      'LoginOtpSendRequested emits sending then sent on success',
+      'LoginOtpSendRequested emits sending then sent, both flagged as the login flow',
       build: build,
       act: (bloc) => bloc.add(const LoginOtpSendRequested('+919876543210')),
       expect: () => [
-        const AuthOtpSending('+919876543210'),
+        const AuthOtpSending('+919876543210', flow: OtpFlow.login),
         const AuthOtpSent(
           mobile: '+919876543210',
           requestId: 'login-req-1',
           expiresIn: 300,
           resendAfter: 30,
+          flow: OtpFlow.login,
         ),
       ],
     );
@@ -211,8 +218,30 @@ void main() {
       },
       act: (bloc) => bloc.add(const LoginOtpSendRequested('+919876543210')),
       expect: () => [
-        const AuthOtpSending('+919876543210'),
+        const AuthOtpSending('+919876543210', flow: OtpFlow.login),
         const AuthUserNotFound('+919876543210'),
+      ],
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'LoginOtpSendRequested with a non-USER_NOT_FOUND error emits AuthOtpSendFailure '
+      'flagged as the login flow, not registration',
+      build: () {
+        repository.sendLoginOtpException = const ApiException(
+          errorCode: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many attempts',
+        );
+        return build();
+      },
+      act: (bloc) => bloc.add(const LoginOtpSendRequested('+919876543210')),
+      expect: () => [
+        const AuthOtpSending('+919876543210', flow: OtpFlow.login),
+        const AuthOtpSendFailure(
+          mobile: '+919876543210',
+          errorCode: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many attempts',
+          flow: OtpFlow.login,
+        ),
       ],
     );
 
@@ -224,6 +253,7 @@ void main() {
         requestId: 'login-req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.login,
       ),
       act: (bloc) => bloc.add(const LoginOtpVerifyRequested('123456')),
       expect: () => [
@@ -250,6 +280,7 @@ void main() {
         requestId: 'login-req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.login,
       ),
       act: (bloc) => bloc.add(const LoginOtpVerifyRequested('123456')),
       expect: () => [
@@ -272,6 +303,7 @@ void main() {
         requestId: 'login-req-1',
         expiresIn: 300,
         resendAfter: 30,
+        flow: OtpFlow.login,
       ),
       act: (bloc) => bloc.add(const LoginOtpVerifyRequested('000000')),
       expect: () => [
@@ -337,6 +369,17 @@ void main() {
       act: (bloc) => bloc.add(const SessionBootstrapRequested()),
       expect: () => [const AuthBootstrapping(), const AuthInitial()],
       verify: (_) => expect(tokenStorage.refreshToken, isNull),
+    );
+
+    blocTest<AuthBloc, AuthState>(
+      'SessionBootstrapRequested with no refresh token never lets a failing '
+      'expiresAt read surface as an unhandled error',
+      build: () {
+        tokenStorage.readAccessTokenExpiresAtException = StateError('Keystore unavailable');
+        return build();
+      },
+      act: (bloc) => bloc.add(const SessionBootstrapRequested()),
+      expect: () => [const AuthBootstrapping(), const AuthInitial()],
     );
 
     // --- MA-21: logout ---

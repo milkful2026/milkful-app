@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,4 +126,63 @@ void main() {
 
     expect(find.text('Log in'), findsNothing);
   });
+
+  testWidgets(
+    'a failed login OTP send (not USER_NOT_FOUND) shows an error message, '
+    'not silence, and the Log in button becomes tappable again',
+    (tester) async {
+      await pumpSignup(tester);
+      authRepository.sendOtpException = const ApiException(
+        errorCode: 'USER_EXISTS',
+        message: 'already registered',
+      );
+
+      await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+      await tester.pumpAndSettle();
+      expect(find.text('Log in'), findsOneWidget);
+
+      authRepository.sendLoginOtpException = const ApiException(
+        errorCode: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many attempts',
+      );
+      await tester.tap(find.text('Log in'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Too many attempts'), findsOneWidget);
+      expect(find.text('Log in'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Send OTP is disabled while a login send is in flight, preventing a '
+    'concurrent registration send from racing it',
+    (tester) async {
+      await pumpSignup(tester);
+      authRepository.sendOtpException = const ApiException(
+        errorCode: 'USER_EXISTS',
+        message: 'already registered',
+      );
+
+      await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+      await tester.pumpAndSettle();
+      expect(find.text('Log in'), findsOneWidget);
+
+      final gate = Completer<void>();
+      authRepository.sendLoginOtpGate = gate;
+      await tester.tap(find.text('Log in'));
+      await tester.pump();
+
+      final sendButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Send OTP'),
+      );
+      expect(sendButton.onPressed, isNull);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+    },
+  );
 }

@@ -14,14 +14,14 @@ class UserProfile extends Equatable {
   final String name;
   final String mobile;
   final String accountType; // "B2C" | "B2B"
-  final String defaultAddressId;
+  final String? defaultAddressId;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         userId: json['userId'] as String,
         name: json['name'] as String,
         mobile: json['mobile'] as String,
         accountType: json['accountType'] as String,
-        defaultAddressId: json['defaultAddressId'] as String,
+        defaultAddressId: json['defaultAddressId'] as String?,
       );
 
   @override

@@ -37,7 +37,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       OtpResendRequested(:final mobile) => mobile,
       _ => throw StateError('unreachable'),
     };
-    emit(AuthOtpSending(mobile));
+    emit(AuthOtpSending(mobile, flow: OtpFlow.registration));
     try {
       final result = await _authRepository.sendOtp(mobile);
       emit(
@@ -46,13 +46,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           requestId: result.requestId,
           expiresIn: result.expiresIn,
           resendAfter: result.resendAfter,
+          flow: OtpFlow.registration,
         ),
       );
     } on ApiException catch (e) {
       if (e.errorCode == 'USER_EXISTS') {
         emit(AuthUserAlreadyExists(mobile));
       } else {
-        emit(AuthOtpSendFailure(mobile: mobile, errorCode: e.errorCode, message: e.message));
+        emit(
+          AuthOtpSendFailure(
+            mobile: mobile,
+            errorCode: e.errorCode,
+            message: e.message,
+            flow: OtpFlow.registration,
+          ),
+        );
       }
     }
   }
@@ -116,7 +124,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       LoginOtpResendRequested(:final mobile) => mobile,
       _ => throw StateError('unreachable'),
     };
-    emit(AuthOtpSending(mobile));
+    emit(AuthOtpSending(mobile, flow: OtpFlow.login));
     try {
       final result = await _authRepository.sendLoginOtp(mobile);
       emit(
@@ -125,13 +133,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           requestId: result.requestId,
           expiresIn: result.expiresIn,
           resendAfter: result.resendAfter,
+          flow: OtpFlow.login,
         ),
       );
     } on ApiException catch (e) {
       if (e.errorCode == 'USER_NOT_FOUND') {
         emit(AuthUserNotFound(mobile));
       } else {
-        emit(AuthOtpSendFailure(mobile: mobile, errorCode: e.errorCode, message: e.message));
+        emit(
+          AuthOtpSendFailure(
+            mobile: mobile,
+            errorCode: e.errorCode,
+            message: e.message,
+            flow: OtpFlow.login,
+          ),
+        );
       }
     }
   }
@@ -186,13 +202,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(const AuthBootstrapping());
-    final refreshToken = await _tokenStorage.readRefreshToken();
+    // Both reads are independent secure-storage lookups — fire them off
+    // together instead of paying two sequential round-trips on every cold
+    // start. The refreshToken future is awaited first since its null-ness
+    // gates everything else; expiresAt has already been in flight the
+    // whole time either way. catchError is attached immediately (not just
+    // when we later await it) so a failing read can't surface as an
+    // unhandled zone error on the no-refresh-token early-return path below.
+    final refreshTokenFuture = _tokenStorage.readRefreshToken();
+    final expiresAtFuture = _tokenStorage.readAccessTokenExpiresAt().catchError((_) => null);
+    final refreshToken = await refreshTokenFuture;
     if (refreshToken == null) {
       emit(const AuthInitial());
       return;
     }
 
-    final expiresAt = await _tokenStorage.readAccessTokenExpiresAt();
+    final expiresAt = await expiresAtFuture;
     final needsRefresh = expiresAt == null || !DateTime.now().isBefore(expiresAt);
     if (needsRefresh) {
       try {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/auth/data/auth_repository.dart';
 import 'package:milkful_app/features/auth/models/token_bundle.dart';
@@ -26,6 +28,11 @@ class FakeAuthRepository implements AuthRepository {
   Object? logoutException;
   OtpSendResult? otpSendResult;
   TokenBundle? tokenBundle;
+
+  /// When set, `sendLoginOtp` waits on this before resolving/throwing —
+  /// lets a test hold a login send "in flight" to exercise races against
+  /// it (e.g. a concurrent registration send).
+  Completer<void>? sendLoginOtpGate;
 
   final List<String> sentTo = [];
   final List<String> verifiedOtps = [];
@@ -62,6 +69,7 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<OtpSendResult> sendLoginOtp(String mobile) async {
     loginSentTo.add(mobile);
+    if (sendLoginOtpGate != null) await sendLoginOtpGate!.future;
     if (sendLoginOtpException != null) throw sendLoginOtpException!;
     return otpSendResult ??
         const OtpSendResult(requestId: 'login-req-1', expiresIn: 300, resendAfter: 30);

@@ -1,5 +1,13 @@
 import 'package:equatable/equatable.dart';
 
+/// Which OTP flow a send/sent/failure state belongs to — registration's
+/// `OtpSendRequested` or the login screen's/signup's-"Log in"-link's
+/// `LoginOtpSendRequested`. Both dispatch onto the same AuthBloc and land
+/// in the same AuthOtpSending/AuthOtpSent/AuthOtpSendFailure state types,
+/// so without this a listener has no way to tell which flow a given state
+/// belongs to other than re-deriving it from local UI flags.
+enum OtpFlow { registration, login }
+
 sealed class AuthState extends Equatable {
   const AuthState();
 
@@ -20,12 +28,13 @@ class AuthBootstrapping extends AuthState {
 }
 
 class AuthOtpSending extends AuthState {
-  const AuthOtpSending(this.mobile);
+  const AuthOtpSending(this.mobile, {required this.flow});
 
   final String mobile;
+  final OtpFlow flow;
 
   @override
-  List<Object?> get props => [mobile];
+  List<Object?> get props => [mobile, flow];
 }
 
 class AuthOtpSent extends AuthState {
@@ -34,15 +43,17 @@ class AuthOtpSent extends AuthState {
     required this.requestId,
     required this.expiresIn,
     required this.resendAfter,
+    required this.flow,
   });
 
   final String mobile;
   final String requestId;
   final int expiresIn;
   final int resendAfter;
+  final OtpFlow flow;
 
   @override
-  List<Object?> get props => [mobile, requestId, expiresIn, resendAfter];
+  List<Object?> get props => [mobile, requestId, expiresIn, resendAfter, flow];
 }
 
 /// FR-1: `POST /auth/otp/send` returned USER_EXISTS — the number already
@@ -61,14 +72,16 @@ class AuthOtpSendFailure extends AuthState {
     required this.mobile,
     required this.errorCode,
     required this.message,
+    required this.flow,
   });
 
   final String mobile;
   final String errorCode;
   final String message;
+  final OtpFlow flow;
 
   @override
-  List<Object?> get props => [mobile, errorCode, message];
+  List<Object?> get props => [mobile, errorCode, message, flow];
 }
 
 class AuthOtpVerifying extends AuthState {

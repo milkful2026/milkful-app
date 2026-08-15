@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     }
-                    if (state is AuthOtpSendFailure) {
+                    if (state is AuthOtpSendFailure && state.flow == OtpFlow.login) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Text(
