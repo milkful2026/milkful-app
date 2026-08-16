@@ -46,7 +46,14 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Freshoza'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary, size: 20),
+            const SizedBox(width: 4),
+            const Text('Freshoza'),
+          ],
+        ),
         actions: [
           IconButton(
             key: const Key('logout-action'),
@@ -56,6 +63,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const _HomeBottomNav(),
       body: Column(
         children: [
           BlocBuilder<AuthBloc, AuthState>(
@@ -80,6 +88,32 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Matches the reference mockup's bottom nav bar. Purely cosmetic for
+/// now — Schedule/Wallet/Profile have no screens or specs behind them
+/// yet, so their items are visually present but disabled (`onTap: null`),
+/// same "present per mockup, not yet wired" treatment as the product
+/// card's own Add button above.
+class _HomeBottomNav extends StatelessWidget {
+  const _HomeBottomNav();
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return BottomNavigationBar(
+      currentIndex: 0,
+      onTap: null,
+      selectedItemColor: primary,
+      unselectedItemColor: Colors.grey.shade400,
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), label: 'Schedule'),
+        BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Wallet'),
+        BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+      ],
     );
   }
 }
