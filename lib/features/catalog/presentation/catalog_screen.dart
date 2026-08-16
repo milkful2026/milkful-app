@@ -11,11 +11,17 @@ import '../data/catalog_repository.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 
+/// Matches the reference mockup's price color — amber, not the brand
+/// green, so price stands out from the rest of a product card's text.
+const _priceAmber = Color(0xFFB07A1E);
+
 /// MA-115. Replaces `HomeScreen`'s placeholder body — see that screen for
 /// the surrounding AppBar/logout chrome, which this widget doesn't own.
-/// Built against the spec's functional requirements (FR-1–FR-8), not a
-/// pixel match of the reference mockup — see MA-115 §11 Risk #3 on why the
-/// mockup itself doesn't show most of these states.
+/// Built against the spec's functional requirements (FR-1–FR-8); the
+/// reference mockup only shows the plain-browse state, so error/empty/
+/// search/filter chrome is this widget's own extrapolation in the same
+/// visual language (see MA-115 §11 Risk #3), not something the mockup
+/// itself depicts.
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
 
@@ -173,12 +179,32 @@ class _TopControls extends StatelessWidget {
                       ),
                     ),
                   )
-                : Text(
-                    state.selectedCategory?.name ?? '',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          state.selectedCategory?.name ?? '',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (state.status == CatalogStatus.loaded)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            '${state.products.length} items',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ),
+                    ],
                   ),
           ),
           if (!state.searchActive)
@@ -416,7 +442,13 @@ class _ProductCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -445,17 +477,21 @@ class _ProductCard extends StatelessWidget {
                 ),
                 if (product.tag != null)
                   Positioned(
-                    top: 2,
-                    left: 2,
+                    top: 4,
+                    left: 4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         product.tag!,
-                        style: const TextStyle(color: Colors.white, fontSize: 9),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -492,7 +528,7 @@ class _ProductCard extends StatelessWidget {
                   Text(
                     '₹${product.price.toStringAsFixed(0)}',
                     style: theme.textTheme.titleMedium
-                        ?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                        ?.copyWith(color: _priceAmber, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
