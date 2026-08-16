@@ -152,6 +152,96 @@ void main() {
     );
 
     blocTest<CatalogBloc, CatalogState>(
+      'SearchModeEntered flips searchActive without re-fetching (FR-5)',
+      build: () {
+        repository
+          ..categories = const [_milkCategory]
+          ..productsByCategory = {
+            'milk': [_cowMilk],
+          };
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const CatalogStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const SearchModeEntered());
+      },
+      wait: const Duration(milliseconds: 10),
+      expect: () => [
+        isA<CatalogState>().having((s) => s.status, 'status', CatalogStatus.loading),
+        isA<CatalogState>()
+            .having((s) => s.categories.length, 'categories', 1)
+            .having((s) => s.selectedCategoryId, 'selectedCategoryId', 'milk')
+            .having((s) => s.status, 'status', CatalogStatus.loading),
+        isA<CatalogState>()
+            .having((s) => s.status, 'status', CatalogStatus.loaded)
+            .having((s) => s.products, 'products', [_cowMilk]),
+        isA<CatalogState>().having((s) => s.searchActive, 'searchActive', isTrue),
+      ],
+      verify: (_) {
+        // No extra fetch beyond CatalogStarted's own.
+        expect(repository.requestedCategoryIds, ['milk']);
+      },
+    );
+
+    blocTest<CatalogBloc, CatalogState>(
+      'SearchCleared drops search mode, query, and filters, and re-fetches the category (FR-5)',
+      build: () {
+        repository
+          ..categories = const [_milkCategory]
+          ..productsByCategory = {
+            'milk': [_cowMilk],
+          }
+          ..searchResults = const [_cowMilk];
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const CatalogStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const SearchQueryChanged('cow'));
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const SearchCleared());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (_) {
+        expect(repository.searchQueries, ['cow']);
+        expect(repository.requestedCategoryIds, ['milk', 'milk']);
+      },
+    );
+
+    blocTest<CatalogBloc, CatalogState>(
+      'rapid category switches only keep the latest selection\'s results (no race)',
+      build: () {
+        repository
+          ..categories = const [_milkCategory, _curdCategory]
+          ..productsByCategory = {
+            'milk': [_cowMilk],
+            'curd': [],
+          }
+          // Curd's fetch is slower than milk's, so without restartable() its
+          // late-arriving response would land after (and overwrite) milk's
+          // — milk itself must stay undelayed since CatalogStarted's own
+          // initial fetch (a separate, uncancelled event stream) also loads
+          // it, and that isn't what this test is exercising.
+          ..categoryFetchDelays = {
+            'curd': const Duration(milliseconds: 20),
+          };
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const CatalogStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const CategorySelected('curd'));
+        bloc.add(const CategorySelected('milk'));
+      },
+      wait: const Duration(milliseconds: 50),
+      verify: (bloc) {
+        expect(bloc.state.selectedCategoryId, 'milk');
+        expect(bloc.state.products, [_cowMilk]);
+      },
+    );
+
+    blocTest<CatalogBloc, CatalogState>(
       'FiltersApplied with no explicit category carries the selected rail category along (FR-6)',
       build: () {
         repository

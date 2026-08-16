@@ -176,10 +176,12 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
                 BlocBuilder<AuthBloc, AuthState>(
                   builder: (context, state) {
                     final verifying = state is AuthOtpVerifying;
+                    final locked = state is AuthOtpVerifyFailure &&
+                        state.errorCode == 'OTP_ATTEMPTS_EXCEEDED';
                     return SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _pinController.text.length != 6 || verifying
+                        onPressed: _pinController.text.length != 6 || verifying || locked
                             ? null
                             : () => widget.onCompleted(context, _pinController.text),
                         child: verifying

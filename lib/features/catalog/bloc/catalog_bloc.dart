@@ -1,3 +1,4 @@
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
@@ -10,12 +11,19 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
   CatalogBloc({required CatalogRepository repository})
       : _repository = repository,
         super(const CatalogState()) {
-    on<CatalogStarted>(_onStarted);
-    on<CategorySelected>(_onCategorySelected);
-    on<SearchQueryChanged>(_onSearchQueryChanged);
-    on<FiltersApplied>(_onFiltersApplied);
-    on<SortChanged>(_onSortChanged);
-    on<CatalogRetryRequested>(_onRetry);
+    on<CatalogStarted>(_onStarted, transformer: restartable());
+    // restartable(): each of these can independently trigger a re-fetch, so
+    // a rapid category tap / search keystroke / filter change must cancel
+    // whatever fetch it superseded rather than racing it — otherwise an
+    // in-flight response for a stale selection can land after (and
+    // overwrite) a newer one.
+    on<CategorySelected>(_onCategorySelected, transformer: restartable());
+    on<SearchQueryChanged>(_onSearchQueryChanged, transformer: restartable());
+    on<SearchModeEntered>(_onSearchModeEntered);
+    on<SearchCleared>(_onSearchCleared, transformer: restartable());
+    on<FiltersApplied>(_onFiltersApplied, transformer: restartable());
+    on<SortChanged>(_onSortChanged, transformer: restartable());
+    on<CatalogRetryRequested>(_onRetry, transformer: restartable());
   }
 
   final CatalogRepository _repository;
@@ -53,6 +61,21 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
 
   Future<void> _onSearchQueryChanged(SearchQueryChanged event, Emitter<CatalogState> emit) async {
     emit(state.copyWith(searchActive: true, searchQuery: event.query));
+    await _fetch(emit);
+  }
+
+  void _onSearchModeEntered(SearchModeEntered event, Emitter<CatalogState> emit) {
+    emit(state.copyWith(searchActive: true));
+  }
+
+  Future<void> _onSearchCleared(SearchCleared event, Emitter<CatalogState> emit) async {
+    emit(
+      state.copyWith(
+        searchActive: false,
+        searchQuery: '',
+        filters: const CatalogFilters(),
+      ),
+    );
     await _fetch(emit);
   }
 

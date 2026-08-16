@@ -14,6 +14,7 @@ class FakeCatalogRepository implements CatalogRepository {
     this.categories = const [],
     this.productsByCategory = const {},
     this.searchResults = const [],
+    this.categoryFetchDelays = const {},
   });
 
   Object? categoriesException;
@@ -22,6 +23,11 @@ class FakeCatalogRepository implements CatalogRepository {
   List<Category> categories;
   Map<String, List<Product>> productsByCategory;
   List<Product> searchResults;
+
+  /// Per-category artificial delay before `getProducts` resolves — lets
+  /// tests simulate a slower response for an earlier request racing against
+  /// a faster response for a later one.
+  Map<String, Duration> categoryFetchDelays;
 
   final List<String> requestedCategoryIds = [];
   final List<String?> searchQueries = [];
@@ -37,6 +43,8 @@ class FakeCatalogRepository implements CatalogRepository {
   @override
   Future<List<Product>> getProducts({required String categoryId}) async {
     requestedCategoryIds.add(categoryId);
+    final delay = categoryFetchDelays[categoryId];
+    if (delay != null) await Future<void>.delayed(delay);
     if (productsException != null) throw productsException!;
     return productsByCategory[categoryId] ?? [];
   }

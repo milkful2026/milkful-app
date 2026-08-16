@@ -28,7 +28,9 @@ class CategorySelected extends CatalogEvent {
 /// FR-5. The screen debounces (300ms) before dispatching this — the bloc
 /// itself doesn't own the debounce timer, matching how this app's other
 /// screens (e.g. `OtpVerificationView`) keep timers in the widget, not the
-/// bloc.
+/// bloc. Only used for actual typed queries — entering/exiting search mode
+/// itself goes through [SearchModeEntered]/[SearchCleared] instead, since
+/// those don't need a re-fetch the way a real query change does.
 class SearchQueryChanged extends CatalogEvent {
   const SearchQueryChanged(this.query);
 
@@ -36,6 +38,19 @@ class SearchQueryChanged extends CatalogEvent {
 
   @override
   List<Object?> get props => [query];
+}
+
+/// The header's search-toggle icon. Just swaps the header over to the
+/// search field — the currently-loaded category products are still valid
+/// (query is empty), so this doesn't re-fetch.
+class SearchModeEntered extends CatalogEvent {
+  const SearchModeEntered();
+}
+
+/// The search field's own clear ("X") button: drops both the query and
+/// search mode itself, reverting to the plain category browse (FR-5).
+class SearchCleared extends CatalogEvent {
+  const SearchCleared();
 }
 
 /// FR-6.

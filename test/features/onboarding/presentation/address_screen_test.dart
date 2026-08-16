@@ -86,8 +86,19 @@ void main() {
   });
 
   testWidgets('Confirm Location submits an AddressDraft built from the manually-entered '
-      'fields, falling back to the map\'s default center for lat/lng', (tester) async {
-    await pumpAddressScreen(tester);
+      'fields, forward-geocoding the typed address for lat/lng since no map/search '
+      'geocode ever resolved', (tester) async {
+    final placesRepository = FakePlacesRepository(
+      geocodedAddress: const GeocodedAddress(
+        formattedAddress: '1 MG Road, Bengaluru, Karnataka 560001',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        pincode: '560001',
+        lat: 12.9716,
+        lng: 77.5946,
+      ),
+    );
+    await pumpAddressScreen(tester, placesRepository: placesRepository);
 
     await tester.enterText(find.byKey(const Key('house-flat-field')), 'Apt 4B, Building 7');
     await tester.enterText(find.byKey(const Key('landmark-field')), 'Near Central Park West');
@@ -99,8 +110,9 @@ void main() {
     final confirmButton = find.widgetWithText(FilledButton, 'Confirm Location');
     await tester.ensureVisible(confirmButton);
     await tester.tap(confirmButton);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
+    expect(placesRepository.geocodedAddresses, isNotEmpty);
     final registered = registrationBloc.state.draft.address;
     expect(registered, isNotNull);
     expect(registered!.lines, ['Apt 4B, Building 7']);
@@ -108,5 +120,37 @@ void main() {
     expect(registered.city, 'Bengaluru');
     expect(registered.state, 'Karnataka');
     expect(registered.pincode, '560001');
+    expect(registered.lat, 12.9716);
+    expect(registered.lng, 77.5946);
   });
+
+  testWidgets(
+    'Confirm Location falls back to the map\'s current pin position when both the map\'s '
+    'reverse-geocode and the submit-time forward-geocode fail',
+    (tester) async {
+      final placesRepository = FakePlacesRepository(
+        geocodeAddressException: Exception('network down'),
+      );
+      await pumpAddressScreen(tester, placesRepository: placesRepository);
+
+      await tester.enterText(find.byKey(const Key('house-flat-field')), 'Apt 4B');
+      await tester.enterText(find.byKey(const Key('city-field')), 'Bengaluru');
+      await tester.enterText(find.byKey(const Key('state-field')), 'Karnataka');
+      await tester.enterText(find.byKey(const Key('pincode-field')), '560001');
+      await tester.pump();
+
+      final confirmButton = find.widgetWithText(FilledButton, 'Confirm Location');
+      await tester.ensureVisible(confirmButton);
+      await tester.tap(confirmButton);
+      await tester.pumpAndSettle();
+
+      final registered = registrationBloc.state.draft.address;
+      expect(registered, isNotNull);
+      // Falls back to the fixed default map center (28.6139, 77.2090) since
+      // the fake map never fires onCameraIdle in this harness, so
+      // _cameraTarget never moves off it.
+      expect(registered!.lat, 28.6139);
+      expect(registered.lng, 77.2090);
+    },
+  );
 }

@@ -48,6 +48,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
     });
   }
 
+  // Cancels any pending debounced query first — otherwise a keystroke typed
+  // just before clearing could still fire 300ms later and undo the clear.
+  void _onSearchCleared() {
+    _debounce?.cancel();
+    _searchController.clear();
+    context.read<CatalogBloc>().add(const SearchCleared());
+  }
+
   Future<void> _openFilterSheet(BuildContext context, CatalogState state) async {
     final result = await showModalBottomSheet<CatalogFilters>(
       context: context,
@@ -100,6 +108,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               state: state,
               searchController: _searchController,
               onSearchChanged: _onSearchChanged,
+              onSearchCleared: _onSearchCleared,
               onFilterTap: () => _openFilterSheet(context, state),
               onSortTap: () => _openSortMenu(context),
             ),
@@ -124,6 +133,7 @@ class _TopControls extends StatelessWidget {
     required this.state,
     required this.searchController,
     required this.onSearchChanged,
+    required this.onSearchCleared,
     required this.onFilterTap,
     required this.onSortTap,
   });
@@ -131,6 +141,7 @@ class _TopControls extends StatelessWidget {
   final CatalogState state;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
+  final VoidCallback onSearchCleared;
   final VoidCallback onFilterTap;
   final VoidCallback onSortTap;
 
@@ -154,15 +165,10 @@ class _TopControls extends StatelessWidget {
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.close),
-                          onPressed: () {
-                            searchController.clear();
-                            onSearchChanged('');
-                            context.read<CatalogBloc>().add(
-                              // FR-5: empty query reverts to category view —
-                              // also drop search-active mode itself.
-                              const SearchQueryChanged(''),
-                            );
-                          },
+                          // FR-5: empty query reverts to category view —
+                          // SearchCleared (not SearchQueryChanged) is what
+                          // actually drops search-active mode itself.
+                          onPressed: onSearchCleared,
                         ),
                       ),
                     ),
@@ -180,10 +186,10 @@ class _TopControls extends StatelessWidget {
               key: const Key('catalog-search-toggle'),
               icon: const Icon(Icons.search),
               tooltip: 'Search',
-              // FR-5: dispatching (even an empty) query is what flips the
-              // bloc's searchActive flag, which is what actually swaps this
-              // header area over to the search field on the next build.
-              onPressed: () => context.read<CatalogBloc>().add(const SearchQueryChanged('')),
+              // Just flips the bloc's searchActive flag, which is what
+              // swaps this header area over to the search field on the next
+              // build — no re-fetch needed since the query is still empty.
+              onPressed: () => context.read<CatalogBloc>().add(const SearchModeEntered()),
             ),
           IconButton(
             key: const Key('catalog-filter-toggle'),

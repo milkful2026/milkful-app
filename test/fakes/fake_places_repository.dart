@@ -9,6 +9,7 @@ class FakePlacesRepository implements PlacesRepository {
     this.autocompleteException,
     this.reverseGeocodeException,
     this.geocodeByPlaceIdException,
+    this.geocodeAddressException,
     this.suggestions = const [],
     this.geocodedAddress,
   });
@@ -16,12 +17,14 @@ class FakePlacesRepository implements PlacesRepository {
   Object? autocompleteException;
   Object? reverseGeocodeException;
   Object? geocodeByPlaceIdException;
+  Object? geocodeAddressException;
   List<PlaceSuggestion> suggestions;
   GeocodedAddress? geocodedAddress;
 
   final List<String> autocompleteQueries = [];
   final List<String> geocodedPlaceIds = [];
   final List<({double lat, double lng})> reverseGeocodedPoints = [];
+  final List<String> geocodedAddresses = [];
 
   static const _defaultGeocodedAddress = GeocodedAddress(
     formattedAddress: '123 Green Valley, Sector 45, Fresh Meadows, 10023',
@@ -50,6 +53,13 @@ class FakePlacesRepository implements PlacesRepository {
   Future<GeocodedAddress> geocodeByPlaceId(String placeId) async {
     geocodedPlaceIds.add(placeId);
     if (geocodeByPlaceIdException != null) throw geocodeByPlaceIdException!;
+    return geocodedAddress ?? _defaultGeocodedAddress;
+  }
+
+  @override
+  Future<GeocodedAddress> geocodeAddress(String address) async {
+    geocodedAddresses.add(address);
+    if (geocodeAddressException != null) throw geocodeAddressException!;
     return geocodedAddress ?? _defaultGeocodedAddress;
   }
 }

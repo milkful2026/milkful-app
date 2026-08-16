@@ -72,6 +72,13 @@ abstract class PlacesRepository {
   /// `latlng`, so this reuses the exact same response parsing as
   /// [reverseGeocode] rather than needing a separate Place Details call.
   Future<GeocodedAddress> geocodeByPlaceId(String placeId);
+
+  /// Forward-geocodes a free-text address (the Geocoding API's `address`
+  /// param). Used as a submit-time fallback when the user typed City/
+  /// State/Pincode directly instead of relying on the map/search, so the
+  /// submitted lat/lng match what they typed rather than silently
+  /// defaulting to wherever the map camera happened to be resting.
+  Future<GeocodedAddress> geocodeAddress(String address);
 }
 
 class GooglePlacesRepository implements PlacesRepository {
@@ -120,6 +127,15 @@ class GooglePlacesRepository implements PlacesRepository {
     final response = await _dio.get<Map<String, dynamic>>(
       '$_baseUrl/geocode/json',
       queryParameters: {'place_id': placeId, 'key': apiKey},
+    );
+    return _firstResultToGeocodedAddress(response.data!);
+  }
+
+  @override
+  Future<GeocodedAddress> geocodeAddress(String address) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '$_baseUrl/geocode/json',
+      queryParameters: {'address': address, 'key': apiKey},
     );
     return _firstResultToGeocodedAddress(response.data!);
   }

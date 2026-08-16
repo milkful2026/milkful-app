@@ -204,12 +204,23 @@ void main() {
     await tester.tap(find.byKey(const Key('catalog-search-toggle')));
     await tester.pump();
     expect(find.byKey(const Key('catalog-search-field')), findsOneWidget);
+    // Entering search mode alone shouldn't have triggered a re-fetch.
+    expect(repository.searchQueries, isEmpty);
 
     await tester.enterText(find.byKey(const Key('catalog-search-field')), 'cow');
     await tester.pump(const Duration(milliseconds: 350)); // clears the 300ms debounce
     await tester.pump();
 
     expect(repository.searchQueries, contains('cow'));
+
+    // Clearing (the field's own "X" button) must actually drop search mode
+    // — the search field disappears and the toggle icon/category header
+    // come back, not just the query text.
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pump();
+
+    expect(find.byKey(const Key('catalog-search-field')), findsNothing);
+    expect(find.byKey(const Key('catalog-search-toggle')), findsOneWidget);
   });
 
   testWidgets('search with no matches shows the empty-search state (FR-5)', (tester) async {

@@ -43,6 +43,8 @@ class _AddressScreenState extends State<AddressScreen> {
   GeocodedAddress? _resolved;
   bool _resolving = false;
   List<PlaceSuggestion> _suggestions = [];
+  Timer? _searchDebounce;
+  int _searchRequestId = 0;
 
   // Once the user edits City/State/Pincode directly, further map-driven
   // reverse-geocode results stop overwriting them — otherwise panning the
@@ -60,6 +62,7 @@ class _AddressScreenState extends State<AddressScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _lineController.dispose();
     _cityController.dispose();
     _stateController.dispose();
@@ -119,17 +122,28 @@ class _AddressScreenState extends State<AddressScreen> {
     }
   }
 
-  Future<void> _onSearchChanged(String query) async {
+  // Debounced (300ms, matching the catalog search field's own pattern) to
+  // avoid firing a Places Autocomplete call on every keystroke. Requests are
+  // also tagged with an incrementing id so a slower response for an earlier
+  // (shorter) query can't land after — and overwrite — a newer one.
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
     if (query.trim().isEmpty) {
+      _searchRequestId++;
       setState(() => _suggestions = []);
       return;
     }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _runSearch(query));
+  }
+
+  Future<void> _runSearch(String query) async {
+    final requestId = ++_searchRequestId;
     try {
       final results = await context.read<PlacesRepository>().autocomplete(query);
-      if (!mounted) return;
+      if (!mounted || requestId != _searchRequestId) return;
       setState(() => _suggestions = results);
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestId != _searchRequestId) return;
       setState(() => _suggestions = []);
     }
   }
@@ -168,18 +182,43 @@ class _AddressScreenState extends State<AddressScreen> {
       _stateController.text.trim().isNotEmpty &&
       RegExp(r'^\d{6}$').hasMatch(_pincodeController.text.trim());
 
-  void _submit() {
+  Future<void> _submit() async {
+    var lat = _resolved?.lat;
+    var lng = _resolved?.lng;
+    // No resolved map/search geocode (e.g. the user typed City/State/
+    // Pincode by hand and the map's own reverse-geocode never succeeded) —
+    // best-effort forward-geocode what they typed, so the submitted point
+    // matches the address text rather than silently defaulting to wherever
+    // the map camera happened to be resting (which could be a different
+    // city entirely).
+    if (lat == null || lng == null) {
+      setState(() => _resolving = true);
+      try {
+        final typed = [
+          _lineController.text.trim(),
+          _cityController.text.trim(),
+          _stateController.text.trim(),
+          _pincodeController.text.trim(),
+        ].where((s) => s.isNotEmpty).join(', ');
+        final geocoded = await context.read<PlacesRepository>().geocodeAddress(typed);
+        lat = geocoded.lat;
+        lng = geocoded.lng;
+      } catch (_) {
+        // Falls through to the map's current pin position below — still
+        // the actual point the user last saw/selected, just without a
+        // resolved match for what they typed.
+      } finally {
+        if (mounted) setState(() => _resolving = false);
+      }
+    }
+    if (!mounted) return;
     final address = AddressDraft(
       lines: [_lineController.text.trim()],
       city: _cityController.text.trim(),
       state: _stateController.text.trim(),
       pincode: _pincodeController.text.trim(),
-      // Falls back to the map's current pin position when reverse-geocoding
-      // never resolved (e.g. the user typed the address manually instead of
-      // relying on the map) — still the actual point they selected/panned
-      // to, just without a resolved place name/components for it.
-      lat: _resolved?.lat ?? _cameraTarget.latitude,
-      lng: _resolved?.lng ?? _cameraTarget.longitude,
+      lat: lat ?? _cameraTarget.latitude,
+      lng: lng ?? _cameraTarget.longitude,
       landmark:
           _landmarkController.text.trim().isEmpty ? null : _landmarkController.text.trim(),
     );
@@ -405,7 +444,7 @@ class _AddressScreenState extends State<AddressScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: !_isValid || checking ? null : _submit,
+                            onPressed: !_isValid || checking || _resolving ? null : _submit,
                             icon: checking
                                 ? const SizedBox(
                                     height: 16,
