@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -10,7 +11,9 @@ import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/profile_repository.dart';
+import 'features/catalog/data/catalog_repository.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
+import 'features/onboarding/data/places_repository.dart';
 import 'features/onboarding/data/registration_repository.dart';
 
 void main() {
@@ -33,6 +36,12 @@ class MilkfulApp extends StatelessWidget {
     final authRepository = DioAuthRepository(apiClient);
     final profileRepository = DioProfileRepository(apiClient);
     final registrationRepository = DioRegistrationRepository(apiClient);
+    final catalogRepository = DioCatalogRepository(apiClient);
+    // A separate, plain Dio — Google's Places/Geocoding APIs use their own
+    // response envelope, not this app's backend's, so they don't go through
+    // ApiClient (which would try to unwrap {requestId,status,data}) or carry
+    // this app's own Authorization header.
+    final placesRepository = GooglePlacesRepository(Dio());
 
     final authBloc = AuthBloc(
       authRepository: authRepository,
@@ -46,6 +55,8 @@ class MilkfulApp extends StatelessWidget {
       providers: [
         RepositoryProvider<SecureTokenStorage>.value(value: tokenStorage),
         RepositoryProvider<DraftStorage>.value(value: draftStorage),
+        RepositoryProvider<PlacesRepository>.value(value: placesRepository),
+        RepositoryProvider<CatalogRepository>.value(value: catalogRepository),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -58,7 +69,7 @@ class MilkfulApp extends StatelessWidget {
           ),
         ],
         child: MaterialApp.router(
-          title: 'Milkful',
+          title: 'Freshoza',
           theme: AppTheme.light,
           routerConfig: buildAppRouter(authBloc),
         ),

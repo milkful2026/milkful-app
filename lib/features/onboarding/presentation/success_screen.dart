@@ -29,17 +29,17 @@ class SuccessScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.check_circle, size: 64, color: Colors.green),
                   const SizedBox(height: 16),
-                  Text('Welcome to Milkful!', style: Theme.of(context).textTheme.headlineSmall),
+                  Text('Welcome to Freshoza!', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   if (result?.walletStatus == 'PENDING')
-                    const Text("Your Milkful Wallet is being set up.")
+                    const Text("Your Freshoza Wallet is being set up.")
                   else if (result?.walletStatus == 'FAILED')
                     Text(
                       'Wallet setup incomplete — contact support if this persists.',
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     )
                   else if (result != null)
-                    const Text('Your Milkful Wallet is ready.'),
+                    const Text('Your Freshoza Wallet is ready.'),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,

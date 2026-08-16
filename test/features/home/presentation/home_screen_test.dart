@@ -4,9 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
 import 'package:milkful_app/features/auth/bloc/auth_event.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
+import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/home/presentation/home_screen.dart';
 
 import '../../../fakes/fake_auth_repository.dart';
+import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
 import '../../../fakes/fake_secure_token_storage.dart';
 
@@ -14,6 +16,14 @@ void main() {
   late FakeAuthRepository authRepository;
   late FakeSecureTokenStorage tokenStorage;
   late AuthBloc authBloc;
+
+  Widget wrapHome(AuthBloc authBloc) => RepositoryProvider<CatalogRepository>.value(
+        value: FakeCatalogRepository(),
+        child: BlocProvider<AuthBloc>.value(
+          value: authBloc,
+          child: const MaterialApp(home: HomeScreen()),
+        ),
+      );
 
   Future<void> pumpHome(WidgetTester tester) async {
     authRepository = FakeAuthRepository();
@@ -26,12 +36,7 @@ void main() {
       profileRepository: FakeProfileRepository(),
     );
     addTearDown(() => authBloc.close());
-    await tester.pumpWidget(
-      BlocProvider<AuthBloc>.value(
-        value: authBloc,
-        child: const MaterialApp(home: HomeScreen()),
-      ),
-    );
+    await tester.pumpWidget(wrapHome(authBloc));
   }
 
   testWidgets('B2B account shows the role indicator chip', (tester) async {
@@ -57,12 +62,7 @@ void main() {
     // SessionBootstrapRequested is the real path that resolves
     // accountType via GET /users/me — the same one app startup uses.
     authBloc.add(const SessionBootstrapRequested());
-    await tester.pumpWidget(
-      BlocProvider<AuthBloc>.value(
-        value: authBloc,
-        child: const MaterialApp(home: HomeScreen()),
-      ),
-    );
+    await tester.pumpWidget(wrapHome(authBloc));
     await tester.pump();
     await tester.pump();
 

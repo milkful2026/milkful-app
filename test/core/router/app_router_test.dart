@@ -6,13 +6,24 @@ import 'package:milkful_app/core/router/app_router.dart';
 import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
 import 'package:milkful_app/features/auth/bloc/auth_event.dart';
 import 'package:milkful_app/features/auth/bloc/auth_state.dart';
+import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 
 import '../../fakes/fake_auth_repository.dart';
+import '../../fakes/fake_catalog_repository.dart';
 import '../../fakes/fake_profile_repository.dart';
 import '../../fakes/fake_secure_token_storage.dart';
 
 void main() {
   late AuthBloc authBloc;
+
+  Widget wrapRouter(GoRouter router, AuthBloc authBloc) =>
+      RepositoryProvider<CatalogRepository>.value(
+        value: FakeCatalogRepository(),
+        child: BlocProvider<AuthBloc>.value(
+          value: authBloc,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
 
   Future<GoRouter> pumpAuthenticatedRouter(WidgetTester tester) async {
     final tokenStorage = FakeSecureTokenStorage()
@@ -29,12 +40,7 @@ void main() {
     await authBloc.stream.firstWhere((s) => s is AuthAuthenticated);
 
     final router = buildAppRouter(authBloc);
-    await tester.pumpWidget(
-      BlocProvider<AuthBloc>.value(
-        value: authBloc,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
+    await tester.pumpWidget(wrapRouter(router, authBloc));
     await tester.pumpAndSettle();
     return router;
   }
@@ -69,12 +75,7 @@ void main() {
     addTearDown(() => authBloc.close());
 
     final router = buildAppRouter(authBloc);
-    await tester.pumpWidget(
-      BlocProvider<AuthBloc>.value(
-        value: authBloc,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
+    await tester.pumpWidget(wrapRouter(router, authBloc));
     await tester.pumpAndSettle();
 
     router.go('/home');
