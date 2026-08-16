@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
-import 'package:milkful_app/features/onboarding/presentation/signup_screen.dart';
+import 'package:milkful_app/features/onboarding/presentation/welcome_screen.dart';
 
 import '../../../fakes/fake_auth_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
@@ -17,10 +17,10 @@ void main() {
   late AuthBloc authBloc;
   late GoRouter router;
 
-  // SignupScreen navigates via context.go on OTP-sent — a real (if
+  // WelcomeScreen navigates via context.go on OTP-sent — a real (if
   // minimal) GoRouter is needed so that call has somewhere to land,
   // rather than throwing for lack of a Router ancestor.
-  Future<void> pumpSignup(WidgetTester tester) async {
+  Future<void> pumpWelcome(WidgetTester tester) async {
     authRepository = FakeAuthRepository();
     authBloc = AuthBloc(
       authRepository: authRepository,
@@ -29,9 +29,9 @@ void main() {
     );
     addTearDown(() => authBloc.close());
     router = GoRouter(
-      initialLocation: '/signup',
+      initialLocation: '/',
       routes: [
-        GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+        GoRoute(path: '/', builder: (context, state) => const WelcomeScreen()),
         GoRoute(path: '/otp', builder: (context, state) => const Placeholder()),
         GoRoute(path: '/login/otp', builder: (context, state) => const Placeholder()),
       ],
@@ -44,41 +44,41 @@ void main() {
     );
   }
 
-  testWidgets('Send OTP is disabled for fewer than 10 digits', (tester) async {
-    await pumpSignup(tester);
+  testWidgets('Continue is disabled for fewer than 10 digits', (tester) async {
+    await pumpWelcome(tester);
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '98765');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '98765');
     await tester.pump();
 
-    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Send OTP'));
+    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'));
     expect(button.onPressed, isNull);
   });
 
-  testWidgets('Send OTP is enabled once exactly 10 digits are entered', (tester) async {
-    await pumpSignup(tester);
+  testWidgets('Continue is enabled once exactly 10 digits are entered', (tester) async {
+    await pumpWelcome(tester);
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
 
-    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Send OTP'));
+    final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'));
     expect(button.onPressed, isNotNull);
   });
 
   testWidgets('non-digit characters are filtered out of the mobile field', (tester) async {
-    await pumpSignup(tester);
+    await pumpWelcome(tester);
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '98a76!54@321#0');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '98a76!54@321#0');
     await tester.pump();
 
     expect(find.text('9876543210'), findsOneWidget);
   });
 
-  testWidgets('tapping Send OTP navigates to /otp, not /login/otp', (tester) async {
-    await pumpSignup(tester);
+  testWidgets('tapping Continue navigates to /otp, not /login/otp', (tester) async {
+    await pumpWelcome(tester);
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(router.state.matchedLocation, '/otp');
@@ -86,15 +86,15 @@ void main() {
 
   testWidgets('USER_EXISTS shows a Log in link; tapping it fires a login OTP send '
       'and navigates to /login/otp, not /otp', (tester) async {
-    await pumpSignup(tester);
+    await pumpWelcome(tester);
     authRepository.sendOtpException = const ApiException(
       errorCode: 'USER_EXISTS',
       message: 'already registered',
     );
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(find.text('Log in'), findsOneWidget);
@@ -109,19 +109,19 @@ void main() {
   testWidgets('editing the mobile number after USER_EXISTS hides the Log in link again', (
     tester,
   ) async {
-    await pumpSignup(tester);
+    await pumpWelcome(tester);
     authRepository.sendOtpException = const ApiException(
       errorCode: 'USER_EXISTS',
       message: 'already registered',
     );
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
     expect(find.text('Log in'), findsOneWidget);
 
-    await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543211');
+    await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543211');
     await tester.pump();
 
     expect(find.text('Log in'), findsNothing);
@@ -131,15 +131,15 @@ void main() {
     'a failed login OTP send (not USER_NOT_FOUND) shows an error message, '
     'not silence, and the Log in button becomes tappable again',
     (tester) async {
-      await pumpSignup(tester);
+      await pumpWelcome(tester);
       authRepository.sendOtpException = const ApiException(
         errorCode: 'USER_EXISTS',
         message: 'already registered',
       );
 
-      await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+      await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Log in'), findsOneWidget);
 
@@ -156,18 +156,18 @@ void main() {
   );
 
   testWidgets(
-    'Send OTP is disabled while a login send is in flight, preventing a '
+    'Continue is disabled while a login send is in flight, preventing a '
     'concurrent registration send from racing it',
     (tester) async {
-      await pumpSignup(tester);
+      await pumpWelcome(tester);
       authRepository.sendOtpException = const ApiException(
         errorCode: 'USER_EXISTS',
         message: 'already registered',
       );
 
-      await tester.enterText(find.bySemanticsLabel('Mobile number'), '9876543210');
+      await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Send OTP'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Log in'), findsOneWidget);
 
@@ -176,10 +176,10 @@ void main() {
       await tester.tap(find.text('Log in'));
       await tester.pump();
 
-      final sendButton = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Send OTP'),
+      final continueButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Continue'),
       );
-      expect(sendButton.onPressed, isNull);
+      expect(continueButton.onPressed, isNull);
 
       gate.complete();
       await tester.pumpAndSettle();

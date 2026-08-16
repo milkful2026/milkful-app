@@ -16,4 +16,16 @@ class AppConfig {
     'INVENTORY_BASE_URL',
     defaultValue: 'http://localhost:8000',
   );
+
+  static const catalogBaseUrl = String.fromEnvironment(
+    'CATALOG_BASE_URL',
+    defaultValue: 'http://localhost:8003',
+  );
+
+  /// Used by [PlacesRepository] for Places Autocomplete/Geocoding HTTP calls
+  /// — separate from the native map-tile key in android/local.properties'
+  /// MAPS_API_KEY (Android) / ios/Runner/ApiKeys.xcconfig (iOS). No safe
+  /// default — pass via --dart-define=GOOGLE_MAPS_API_KEY=... at run/build
+  /// time; never hardcode the real key here (this file is committed).
+  static const googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
 }

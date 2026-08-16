@@ -64,8 +64,8 @@ void main() {
   testWidgets('PENDING wallet status shows the "being set up" message', (tester) async {
     await pumpSuccess(tester, 'PENDING');
 
-    expect(find.text('Your Milkful Wallet is being set up.'), findsOneWidget);
-    expect(find.text('Your Milkful Wallet is ready.'), findsNothing);
+    expect(find.text('Your Freshoza Wallet is being set up.'), findsOneWidget);
+    expect(find.text('Your Freshoza Wallet is ready.'), findsNothing);
   });
 
   testWidgets(
@@ -73,7 +73,7 @@ void main() {
     (tester) async {
       await pumpSuccess(tester, 'FAILED');
 
-      expect(find.text('Your Milkful Wallet is ready.'), findsNothing);
+      expect(find.text('Your Freshoza Wallet is ready.'), findsNothing);
       expect(
         find.text('Wallet setup incomplete — contact support if this persists.'),
         findsOneWidget,
@@ -84,6 +84,6 @@ void main() {
   testWidgets('ACTIVE wallet status shows the "ready" message', (tester) async {
     await pumpSuccess(tester, 'ACTIVE');
 
-    expect(find.text('Your Milkful Wallet is ready.'), findsOneWidget);
+    expect(find.text('Your Freshoza Wallet is ready.'), findsOneWidget);
   });
 }

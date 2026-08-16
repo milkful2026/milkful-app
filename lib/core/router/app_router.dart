@@ -12,7 +12,6 @@ import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/consent_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/profile_screen.dart';
-import '../../features/onboarding/presentation/signup_screen.dart';
 import '../../features/onboarding/presentation/slot_screen.dart';
 import '../../features/onboarding/presentation/success_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
@@ -61,7 +60,11 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const WelcomeScreen()),
-      GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+      // LoginScreen's "Sign up" link still targets /signup — kept as a
+      // second route to the same merged Welcome+Signup screen (see
+      // welcome_screen.dart's own doc comment) rather than touching
+      // login_screen.dart/login_screen_test.dart.
+      GoRoute(path: '/signup', builder: (context, state) => const WelcomeScreen()),
       GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/address', builder: (context, state) => const AddressScreen()),

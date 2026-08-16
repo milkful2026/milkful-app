@@ -51,6 +51,11 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
     super.initState();
     final authState = context.read<AuthBloc>().state;
     _startCountdown(authState is AuthOtpSent ? authState.resendAfter : 30);
+    // The new "Verify & Proceed" button's enabled state depends on the
+    // pin's current length — Pinput's own onCompleted callback doesn't fire
+    // until the field is already full, so this listener is what lets the
+    // button light up in step with typing rather than only after the fact.
+    _pinController.addListener(() => setState(() {}));
   }
 
   void _startCountdown(int seconds) {
@@ -81,8 +86,25 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pinTheme = PinTheme(
+      width: 48,
+      height: 52,
+      textStyle: theme.textTheme.titleLarge,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+    );
+    final focusedPinTheme = pinTheme.copyWith(
+      decoration: pinTheme.decoration!.copyWith(
+        border: Border.all(color: theme.colorScheme.primary, width: 2),
+      ),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify your number')),
+      appBar: AppBar(leading: const BackButton()),
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) async {
           if (state is AuthAuthenticated) {
@@ -98,20 +120,44 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.bodyText),
+                Center(
+                  child: CircleAvatar(
+                    radius: 36,
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    child: Icon(Icons.sms_outlined, size: 32, color: theme.colorScheme.primary),
+                  ),
+                ),
                 const SizedBox(height: 24),
-                BlocBuilder<AuthBloc, AuthState>(
-                  builder: (context, state) {
-                    final locked = state is AuthOtpVerifyFailure &&
-                        state.errorCode == 'OTP_ATTEMPTS_EXCEEDED';
-                    return Pinput(
-                      key: widget.pinKey,
-                      length: 6,
-                      controller: _pinController,
-                      enabled: !locked,
-                      onCompleted: (otp) => widget.onCompleted(context, otp),
-                    );
-                  },
+                SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    'Verify your number',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: Text(widget.bodyText, textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: BlocBuilder<AuthBloc, AuthState>(
+                    builder: (context, state) {
+                      final locked = state is AuthOtpVerifyFailure &&
+                          state.errorCode == 'OTP_ATTEMPTS_EXCEEDED';
+                      return Pinput(
+                        key: widget.pinKey,
+                        length: 6,
+                        controller: _pinController,
+                        enabled: !locked,
+                        defaultPinTheme: pinTheme,
+                        focusedPinTheme: focusedPinTheme,
+                        onCompleted: (otp) => widget.onCompleted(context, otp),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: 16),
                 BlocBuilder<AuthBloc, AuthState>(
@@ -119,44 +165,60 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
                     if (state is AuthOtpVerifyFailure) {
                       return Text(
                         _errorText(state.errorCode),
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: theme.colorScheme.error),
                       );
                     }
                     return const SizedBox.shrink();
                   },
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    if (_secondsRemaining > 0)
-                      Text(
-                        '${widget.resendLabel} in 0:${_secondsRemaining.toString().padLeft(2, '0')}',
-                      )
-                    else
-                      BlocBuilder<AuthBloc, AuthState>(
-                        builder: (context, state) {
-                          final mobile = switch (state) {
-                            AuthOtpSent(:final mobile) => mobile,
-                            AuthOtpVerifying(:final mobile) => mobile,
-                            AuthOtpVerifyFailure(:final mobile) => mobile,
-                            _ => null,
-                          };
-                          return TextButton(
-                            onPressed: mobile == null
-                                ? null
-                                : () => widget.onResend(context, mobile),
-                            child: Text(widget.resendLabel),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 BlocBuilder<AuthBloc, AuthState>(
                   builder: (context, state) {
-                    if (state is! AuthOtpVerifying) return const SizedBox.shrink();
-                    return const Center(child: CircularProgressIndicator());
+                    final verifying = state is AuthOtpVerifying;
+                    final locked = state is AuthOtpVerifyFailure &&
+                        state.errorCode == 'OTP_ATTEMPTS_EXCEEDED';
+                    return SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _pinController.text.length != 6 || verifying || locked
+                            ? null
+                            : () => widget.onCompleted(context, _pinController.text),
+                        child: verifying
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Verify & Proceed'),
+                      ),
+                    );
                   },
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: _secondsRemaining > 0
+                      ? Text(
+                          '${widget.resendLabel} in 0:${_secondsRemaining.toString().padLeft(2, '0')}',
+                        )
+                      : BlocBuilder<AuthBloc, AuthState>(
+                          builder: (context, state) {
+                            final mobile = switch (state) {
+                              AuthOtpSent(:final mobile) => mobile,
+                              AuthOtpVerifying(:final mobile) => mobile,
+                              AuthOtpVerifyFailure(:final mobile) => mobile,
+                              _ => null,
+                            };
+                            return TextButton(
+                              onPressed:
+                                  mobile == null ? null : () => widget.onResend(context, mobile),
+                              child: Text(widget.resendLabel),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
