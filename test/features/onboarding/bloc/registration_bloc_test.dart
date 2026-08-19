@@ -34,7 +34,8 @@ void main() {
 
     blocTest<RegistrationBloc, RegistrationState>(
       'AddressSubmitted for a serviceable address confirms the zone and '
-      'lands on the Home screen\'s awaitingName step (no separate slot step)',
+      'auto-submits registration with implicit consent and no separate '
+      'name/slot step, then clears the draft',
       build: () {
         repository.serviceabilityResult = const ServiceabilityResult(
           serviceable: true,
@@ -48,9 +49,18 @@ void main() {
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.awaitingName)
+            .having((s) => s.phase, 'phase', RegistrationPhase.submitting)
             .having((s) => s.draft.zoneId, 'zoneId', 'blr-central'),
+        isA<RegistrationState>()
+            .having((s) => s.phase, 'phase', RegistrationPhase.success)
+            .having((s) => s.result?.userId, 'userId', 'user-1')
+            .having((s) => s.draft.termsAccepted, 'termsAccepted', isTrue)
+            .having((s) => s.draft.privacyAccepted, 'privacyAccepted', isTrue),
       ],
+      verify: (_) {
+        expect(repository.lastRegistered?.name, isNotNull);
+        expect(draftStorage.saved, isNull);
+      },
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
@@ -97,56 +107,55 @@ void main() {
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.awaitingName)
-            .having((s) => s.draft.zoneId, 'zoneId', 'z1'),
-      ],
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'NameSubmitted registers with implicit consent (no dedicated consent '
-      'step) and no preferredSlotId, then clears the draft',
-      build: build,
-      seed: () => RegistrationState.initial().copyWith(
-        draft: const RegistrationDraft(address: _address, zoneId: 'blr-central'),
-        phase: RegistrationPhase.awaitingName,
-      ),
-      act: (bloc) => bloc.add(const NameSubmitted('Priya Sharma')),
-      expect: () => [
-        isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.submitting)
-            .having((s) => s.draft.name, 'name', 'Priya Sharma')
-            .having((s) => s.draft.termsAccepted, 'termsAccepted', isTrue)
-            .having((s) => s.draft.privacyAccepted, 'privacyAccepted', isTrue),
+            .having((s) => s.draft.zoneId, 'zoneId', 'z1'),
         isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.success)
-            .having((s) => s.result?.userId, 'userId', 'user-1'),
+            .having((s) => s.phase, 'phase', RegistrationPhase.success),
       ],
-      verify: (_) {
-        expect(repository.lastRegistered?.name, 'Priya Sharma');
-        expect(draftStorage.saved, isNull);
-      },
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'NameSubmitted failure lands on submitFailed with the backend message',
+      'a registration submit failure lands on submitFailed with the backend message',
       build: () {
+        repository.serviceabilityResult = const ServiceabilityResult(
+          serviceable: true,
+          zoneId: 'blr-central',
+        );
         repository.registerException = const ApiException(
           errorCode: 'NOT_SERVICEABLE',
           message: 'Address is not serviceable',
         );
         return build();
       },
-      seed: () => RegistrationState.initial().copyWith(
-        draft: const RegistrationDraft(address: _address, zoneId: 'blr-central'),
-        phase: RegistrationPhase.awaitingName,
-      ),
-      act: (bloc) => bloc.add(const NameSubmitted('Priya Sharma')),
+      act: (bloc) => bloc.add(const AddressSubmitted(_address)),
       expect: () => [
+        isA<RegistrationState>()
+            .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.submitting),
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.submitFailed)
             .having((s) => s.errorMessage, 'message', 'Address is not serviceable'),
       ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'RegistrationRetryRequested resubmits after submitFailed without asking for anything',
+      build: build,
+      seed: () => RegistrationState.initial().copyWith(
+        draft: const RegistrationDraft(address: _address, zoneId: 'blr-central'),
+        phase: RegistrationPhase.submitFailed,
+        errorMessage: 'Address is not serviceable',
+      ),
+      act: (bloc) => bloc.add(const RegistrationRetryRequested()),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.submitting),
+        isA<RegistrationState>()
+            .having((s) => s.phase, 'phase', RegistrationPhase.success)
+            .having((s) => s.result?.userId, 'userId', 'user-1'),
+      ],
+      verify: (_) {
+        expect(draftStorage.saved, isNull);
+      },
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
@@ -205,13 +214,14 @@ void main() {
 
     blocTest<RegistrationBloc, RegistrationState>(
       'DraftRestored with an address and a confirmed zone (registration '
-      'interrupted before completing) resumes at awaitingName',
+      'interrupted before completing) finishes submitting it automatically',
       build: build,
       act: (bloc) => bloc.add(
         const DraftRestored(RegistrationDraft(address: _address, zoneId: 'blr-central')),
       ),
       expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.awaitingName),
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.submitting),
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.success),
       ],
     );
   });

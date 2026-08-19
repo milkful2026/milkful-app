@@ -9,12 +9,12 @@ enum RegistrationPhase {
   notServiceable,
   serviceabilityCheckFailed,
 
-  /// Serviceability confirmed — the Home screen shows its inline "What
-  /// should we call you?" prompt (name and the old dedicated slot/consent
-  /// steps were folded in here; consent is implicit via the Welcome
-  /// screen's own footer text, and slot selection moved to Home's own
-  /// calendar picker, usable independently of registration completing).
-  awaitingName,
+  /// Serviceability confirmed — registration submits automatically from
+  /// here (no dedicated name/slot/consent steps: consent is implicit via
+  /// the Welcome screen's own footer text, slot selection moved to Home's
+  /// own calendar picker usable independently of registration completing,
+  /// and name is no longer collected from the user at all — see
+  /// RegistrationBloc's own doc comment on `_submitRegistration`).
   submitting,
   success,
   submitFailed,

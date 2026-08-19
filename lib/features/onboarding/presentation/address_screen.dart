@@ -232,10 +232,10 @@ class _AddressScreenState extends State<AddressScreen> {
       extendBodyBehindAppBar: true,
       body: BlocConsumer<RegistrationBloc, RegistrationState>(
         listener: (context, state) {
-          // Serviceability confirmed — Home shows the inline name prompt
-          // that finishes registration (name/consent/slot no longer have
-          // their own dedicated wizard steps).
-          if (state.phase == RegistrationPhase.awaitingName) {
+          // Serviceability confirmed — registration auto-submits from here
+          // (name/consent/slot no longer have their own dedicated wizard
+          // steps), so Home is where that plays out.
+          if (state.phase == RegistrationPhase.submitting) {
             context.go('/home');
           }
         },

@@ -38,19 +38,12 @@ class ServiceabilityRetryRequested extends RegistrationEvent {
   const ServiceabilityRetryRequested();
 }
 
-/// The Home screen's inline "What should we call you?" prompt, shown once
-/// serviceability is confirmed — this is now also the final-submit
-/// trigger: Terms & Privacy consent is implicit (the Welcome screen's own
-/// "by continuing you agree..." footer), so there's no separate consent
-/// step gating this the way there used to be. Submitting a name calls
-/// `POST /users/register` directly.
-class NameSubmitted extends RegistrationEvent {
-  const NameSubmitted(this.name);
-
-  final String name;
-
-  @override
-  List<Object?> get props => [name];
+/// Retries the final `POST /users/register` call after [RegistrationPhase.
+/// submitFailed] — there's no form standing between serviceability
+/// confirmation and submission anymore, so a failed attempt is retried
+/// as-is rather than re-collecting anything from the user.
+class RegistrationRetryRequested extends RegistrationEvent {
+  const RegistrationRetryRequested();
 }
 
 /// Fetches delivery slots for the Home screen's own calendar-style slot

@@ -17,7 +17,7 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
     on<DraftRestored>(_onDraftRestored);
     on<AddressSubmitted>(_onAddressSubmitted);
     on<ServiceabilityRetryRequested>(_onServiceabilityRetry);
-    on<NameSubmitted>(_onNameSubmitted);
+    on<RegistrationRetryRequested>(_onRegistrationRetry);
     on<DeliverySlotsRequested>(_onDeliverySlotsRequested);
   }
 
@@ -44,8 +44,9 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
     }
     // Address + a confirmed zone but the draft still exists on disk means
     // registration itself never completed (a real success clears it) —
-    // resume at the Home screen's inline name prompt.
-    emit(RegistrationState(draft: draft, phase: RegistrationPhase.awaitingName));
+    // finish submitting it now rather than waiting on any user input.
+    emit(RegistrationState(draft: draft, phase: RegistrationPhase.submitting));
+    await _submitRegistration(emit);
   }
 
   Future<void> _onAddressSubmitted(
@@ -86,7 +87,8 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
       }
       final draft = state.draft.copyWith(zoneId: result.zoneId);
       await _persist(draft);
-      emit(state.copyWith(draft: draft, phase: RegistrationPhase.awaitingName));
+      emit(state.copyWith(draft: draft, phase: RegistrationPhase.submitting));
+      await _submitRegistration(emit);
     } on ApiException catch (e) {
       emit(state.copyWith(phase: RegistrationPhase.serviceabilityCheckFailed, errorMessage: e.message));
     } catch (_) {
@@ -107,13 +109,18 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
   /// sent either; delivery-slot preference is chosen later, independently,
   /// from Home's own calendar picker (see [DeliverySlotsRequested]) —
   /// registration's own contract already treats that field as optional.
-  Future<void> _onNameSubmitted(NameSubmitted event, Emitter<RegistrationState> emit) async {
+  ///
+  /// Name is no longer collected from the user at all (the old Home-screen
+  /// prompt is gone) — the backend's own `RegisterRequestDto.name` is still
+  /// a required 2-100 char field, so a placeholder is sent silently; it's
+  /// never surfaced anywhere in the UI (Home's greeting no longer shows a
+  /// name either).
+  Future<void> _submitRegistration(Emitter<RegistrationState> emit) async {
     final draft = state.draft.copyWith(
-      name: event.name,
+      name: state.draft.name ?? 'Freshoza Customer',
       termsAccepted: true,
       privacyAccepted: true,
     );
-    emit(state.copyWith(draft: draft, phase: RegistrationPhase.submitting));
     try {
       final result = await _repository.register(draft);
       await _draftStorage.clear();
@@ -129,6 +136,14 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
         ),
       );
     }
+  }
+
+  Future<void> _onRegistrationRetry(
+    RegistrationRetryRequested event,
+    Emitter<RegistrationState> emit,
+  ) async {
+    emit(state.copyWith(phase: RegistrationPhase.submitting));
+    await _submitRegistration(emit);
   }
 
   /// Best-effort — Home's own calendar picker shows an empty/error state

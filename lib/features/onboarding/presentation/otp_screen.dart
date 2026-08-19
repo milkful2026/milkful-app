@@ -13,10 +13,14 @@ import '../bloc/registration_state.dart';
 /// FR-10: maps a resumed draft's settled phase to the screen that owns it.
 /// `address`/`serviceabilityCheckFailed`/`notServiceable` all resolve to
 /// `/address` since that screen already renders the right UI for each;
-/// `awaitingName` means serviceability is already confirmed, so Home is
-/// what shows the inline name prompt that finishes registration.
+/// `submitting`/`success`/`submitFailed` all mean serviceability is already
+/// confirmed and registration has been (or is being) auto-submitted, so
+/// Home is where that plays out.
 String _routeForPhase(RegistrationPhase phase) => switch (phase) {
-      RegistrationPhase.awaitingName => '/home',
+      RegistrationPhase.submitting ||
+      RegistrationPhase.success ||
+      RegistrationPhase.submitFailed =>
+        '/home',
       _ => '/address',
     };
 

@@ -20,15 +20,15 @@ import '../../onboarding/bloc/registration_state.dart';
 ///
 /// This screen has since absorbed what used to be three separate
 /// onboarding steps:
-/// - **Name**: the old dedicated screen is gone — [_NamePromptOverlay]
-///   below collects it inline, right here, the first time a freshly
-///   address-confirmed registration reaches Home (`RegistrationPhase.
-///   awaitingName`). Submitting it is also what actually calls
-///   `POST /users/register` now (see registration_bloc.dart).
+/// - **Name**: no longer collected from the user at all — the old dedicated
+///   screen, and later the inline Home-screen prompt that replaced it, are
+///   both gone. Registration now submits automatically as soon as
+///   serviceability is confirmed (see registration_bloc.dart's
+///   `_submitRegistration`), with a placeholder name the UI never shows.
 /// - **Consent**: no longer a gated step at all — Terms & Privacy
 ///   acceptance is implicit (Welcome screen's own "by continuing you
-///   agree..." footer), so `NameSubmitted` always submits with both
-///   marked accepted.
+///   agree..." footer), so registration always submits with both marked
+///   accepted.
 /// - **Delivery slot**: [_DeliverySlotPicker] below replaces the old
 ///   dedicated slot-selection screen with a calendar-style strip, usable
 ///   any time (not just mid-registration) — see its own doc comment for
@@ -103,10 +103,23 @@ class _HomeScreenState extends State<HomeScreen> {
       child: BlocListener<RegistrationBloc, RegistrationState>(
         listenWhen: (previous, current) => previous.phase != current.phase,
         listener: (context, state) {
+          if (state.phase == RegistrationPhase.submitFailed) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage ?? 'Something went wrong. Please try again.'),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  onPressed: () =>
+                      context.read<RegistrationBloc>().add(const RegistrationRetryRequested()),
+                ),
+              ),
+            );
+            return;
+          }
           if (state.phase != RegistrationPhase.success) return;
           // AuthBloc's own profile lookup was skipped at OTP-verify time
-          // (the profile didn't exist yet) — refresh it now so the
-          // greeting below picks up the real name/accountType.
+          // (the profile didn't exist yet) — refresh it now so the rest of
+          // Home picks up the real accountType.
           context.read<AuthBloc>().add(const ProfileRefreshRequested());
           final zoneId = state.draft.zoneId;
           if (zoneId != null) {
@@ -179,34 +192,21 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           bottomNavigationBar: const _HomeBottomNav(),
-          body: Stack(
+          body: Column(
             children: [
-              Column(
-                children: [
-                  BlocBuilder<AuthBloc, AuthState>(
-                    builder: (context, state) {
-                      final accountType = state is AuthAuthenticated ? state.accountType : null;
-                      if (accountType != 'B2B') return const SizedBox.shrink();
-                      return const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Chip(label: Text('B2B account')),
-                      );
-                    },
-                  ),
-                  const _GreetingBar(),
-                  const _DeliverySlotPicker(),
-                  const Expanded(child: CatalogScreen()),
-                ],
-              ),
-              BlocBuilder<RegistrationBloc, RegistrationState>(
+              BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, state) {
-                  final needsName = state.phase == RegistrationPhase.awaitingName ||
-                      state.phase == RegistrationPhase.submitting ||
-                      state.phase == RegistrationPhase.submitFailed;
-                  if (!needsName) return const SizedBox.shrink();
-                  return _NamePromptOverlay(state: state);
+                  final accountType = state is AuthAuthenticated ? state.accountType : null;
+                  if (accountType != 'B2B') return const SizedBox.shrink();
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Chip(label: Text('B2B account')),
+                  );
                 },
               ),
+              const _GreetingBar(),
+              const _DeliverySlotPicker(),
+              const Expanded(child: CatalogScreen()),
             ],
           ),
         ),
@@ -221,135 +221,19 @@ class _HomeScreenState extends State<HomeScreen> {
       };
 }
 
-/// The Home screen's own "What should we call you?" prompt — replaces the
-/// old dedicated Name screen (and, by submitting, the old Consent
-/// screen's final-submit button too). Non-dismissible: registration isn't
-/// actually complete until this is answered, so the rest of Home stays
-/// covered until then, the same way the old wizard blocked progress past
-/// an unanswered required step.
-class _NamePromptOverlay extends StatefulWidget {
-  const _NamePromptOverlay({required this.state});
-
-  final RegistrationState state;
-
-  @override
-  State<_NamePromptOverlay> createState() => _NamePromptOverlayState();
-}
-
-class _NamePromptOverlayState extends State<_NamePromptOverlay> {
-  final _controller = TextEditingController();
-
-  bool get _isValid {
-    final length = _controller.text.trim().length;
-    return length >= 2 && length <= 100;
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final submitting = widget.state.phase == RegistrationPhase.submitting;
-    return Positioned.fill(
-      child: ColoredBox(
-        color: Colors.black54,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "You're almost there!",
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('What should we call you?'),
-                    const SizedBox(height: 16),
-                    Semantics(
-                      label: 'Full name',
-                      child: TextField(
-                        key: const Key('home-name-field'),
-                        controller: _controller,
-                        enabled: !submitting,
-                        decoration: const InputDecoration(
-                          labelText: 'Full name',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    if (widget.state.phase == RegistrationPhase.submitFailed)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(
-                          widget.state.errorMessage ?? 'Something went wrong',
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        key: const Key('home-name-submit'),
-                        onPressed: !_isValid || submitting
-                            ? null
-                            : () => context
-                                .read<RegistrationBloc>()
-                                .add(NameSubmitted(_controller.text.trim())),
-                        child: submitting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Continue'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// "Welcome, {name}" — AuthBloc's own fetched profile name is preferred
-/// (the single source of truth for a *returning* user too), falling back
-/// to the registration draft's name for the brief window right after a
-/// fresh registration, before AuthBloc's own refresh (triggered in
-/// [_HomeScreenState.build]'s listener) has landed.
+/// A plain, non-personalized greeting — no name is collected from the user
+/// anywhere in the app anymore, so this never varies per-user.
 class _GreetingBar extends StatelessWidget {
   const _GreetingBar();
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, authState) {
-        final authName = authState is AuthAuthenticated ? authState.name : null;
-        return BlocBuilder<RegistrationBloc, RegistrationState>(
-          builder: (context, regState) {
-            final name = authName ?? regState.draft.name;
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                name == null ? 'Welcome!' : 'Welcome, $name!',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            );
-          },
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        'Welcome!',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      ),
     );
   }
 }
