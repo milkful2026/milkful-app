@@ -103,14 +103,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                   .titleLarge
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Enter your mobile number to login or join the community.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
                             const SizedBox(height: 16),
-                            Text('Mobile Number', style: Theme.of(context).textTheme.labelMedium),
-                            const SizedBox(height: 4),
                             Semantics(
                               label: 'Mobile number',
                               child: TextField(
@@ -120,6 +113,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                 maxLength: 10,
                                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                                 decoration: const InputDecoration(
+                                  labelText: 'Mobile Number',
+                                  prefixIcon: Padding(
+                                    padding: EdgeInsets.only(left: 12, right: 4),
+                                    child: Text('🇮🇳', style: TextStyle(fontSize: 20)),
+                                  ),
+                                  prefixIconConstraints: BoxConstraints(minWidth: 0, minHeight: 0),
                                   prefixText: '+91  ',
                                   counterText: '',
                                 ),
