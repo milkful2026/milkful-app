@@ -78,6 +78,7 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
@@ -94,11 +95,13 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(find.text('Log in'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Log in'));
     await tester.tap(find.text('Log in'));
     await tester.pumpAndSettle();
 
@@ -117,6 +120,7 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
     await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
     expect(find.text('Log in'), findsOneWidget);
@@ -139,7 +143,8 @@ void main() {
 
       await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Log in'), findsOneWidget);
 
@@ -147,7 +152,8 @@ void main() {
         errorCode: 'RATE_LIMIT_EXCEEDED',
         message: 'Too many attempts',
       );
-      await tester.tap(find.text('Log in'));
+      await tester.ensureVisible(find.text('Log in'));
+    await tester.tap(find.text('Log in'));
       await tester.pumpAndSettle();
 
       expect(find.text('Too many attempts'), findsOneWidget);
@@ -167,13 +173,15 @@ void main() {
 
       await tester.enterText(find.byKey(const Key('mobile-number-field')), '9876543210');
       await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
       await tester.pumpAndSettle();
       expect(find.text('Log in'), findsOneWidget);
 
       final gate = Completer<void>();
       authRepository.sendLoginOtpGate = gate;
-      await tester.tap(find.text('Log in'));
+      await tester.ensureVisible(find.text('Log in'));
+    await tester.tap(find.text('Log in'));
       await tester.pump();
 
       final continueButton = tester.widget<FilledButton>(

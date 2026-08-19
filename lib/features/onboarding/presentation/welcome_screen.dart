@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -68,31 +70,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 32),
-                    Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
+                    ClipOval(
+                      child: Image.asset(
+                        'assets/images/branding/logo.jpg',
+                        width: 84,
+                        height: 84,
+                        fit: BoxFit.cover,
                       ),
-                      child: Icon(Icons.eco, size: 36, color: Theme.of(context).colorScheme.primary),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'Freshoza',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       'Your local harvest, delivered fresh to your door.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                    const _ProductImageSlider(),
+                    const SizedBox(height: 24),
                     Card(
                       elevation: 0,
                       color: Colors.white,
@@ -264,6 +258,114 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Auto-advancing carousel of the seeded catalog's own product photos —
+/// bundled locally (see assets/images/README.md), not loaded from
+/// network, so this has no loading/error state to handle.
+class _ProductImageSlider extends StatefulWidget {
+  const _ProductImageSlider();
+
+  @override
+  State<_ProductImageSlider> createState() => _ProductImageSliderState();
+}
+
+class _ProductImageSliderState extends State<_ProductImageSlider> {
+  static const _slides = [
+    ('assets/images/products/cow-milk.jpg', 'Cow Milk'),
+    ('assets/images/products/buffalo-milk.jpg', 'Buffalo Milk'),
+    ('assets/images/products/low-fat-milk.jpg', 'Low Fat Milk'),
+    ('assets/images/products/set-curd.jpg', 'Fresh Curd'),
+    ('assets/images/products/greek-yogurt.jpg', 'Greek Yogurt'),
+    ('assets/images/products/malai-paneer.jpg', 'Malai Paneer'),
+    ('assets/images/products/cow-ghee.jpg', 'Cow Ghee'),
+    ('assets/images/products/spinach.jpg', 'Fresh Spinach'),
+  ];
+
+  final _pageController = PageController();
+  Timer? _timer;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      _pageController.animateToPage(
+        (_page + 1) % _slides.length,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(
+      children: [
+        SizedBox(
+          key: const Key('welcome-product-slider'),
+          height: 190,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: _slides.length,
+            onPageChanged: (index) => setState(() => _page = index),
+            itemBuilder: (context, index) {
+              final (asset, label) = _slides[index];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 140,
+                    height: 140,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                    ),
+                    child: Image.asset(asset, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    label,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600, color: primary),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _slides.length; i++)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: i == _page ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  color: i == _page ? primary : Colors.grey.shade300,
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

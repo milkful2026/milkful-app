@@ -383,20 +383,14 @@ class _ProductCard extends StatelessWidget {
                   child: SizedBox(
                     width: 72,
                     height: 72,
-                    child: product.imageUrl == null
-                        ? Container(
-                            color: theme.colorScheme.primaryContainer,
-                            child: Icon(Icons.image_outlined, color: theme.colorScheme.primary),
-                          )
-                        : Image.network(
+                    child: product.imageUrl != null
+                        ? Image.network(
                             product.imageUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: theme.colorScheme.primaryContainer,
-                              child:
-                                  Icon(Icons.image_outlined, color: theme.colorScheme.primary),
-                            ),
-                          ),
+                            errorBuilder: (context, error, stackTrace) =>
+                                _ProductImageFallback(product: product, theme: theme),
+                          )
+                        : _ProductImageFallback(product: product, theme: theme),
                   ),
                 ),
                 if (product.tag != null)
@@ -460,6 +454,32 @@ class _ProductCard extends StatelessWidget {
             SizedBox(width: 84, child: _ProductAction(product: product)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The backend has no real product-image pipeline yet (`imageUrl` is
+/// always null in seeded data — see catalog service's own README), so
+/// this bundles the same photos the reference mockups use, keyed by
+/// product id (see assets/images/README.md). Falls back to the old grey
+/// placeholder icon for any product id that isn't one of the ones
+/// bundled — a new product added on the backend degrades gracefully
+/// rather than crashing on a missing asset.
+class _ProductImageFallback extends StatelessWidget {
+  const _ProductImageFallback({required this.product, required this.theme});
+
+  final Product product;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/images/products/${product.id}.jpg',
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: theme.colorScheme.primaryContainer,
+        child: Icon(Icons.image_outlined, color: theme.colorScheme.primary),
       ),
     );
   }

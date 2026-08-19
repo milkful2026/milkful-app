@@ -124,7 +124,7 @@ class _OtpVerificationViewState extends State<OtpVerificationView> {
                   child: CircleAvatar(
                     radius: 36,
                     backgroundColor: theme.colorScheme.primaryContainer,
-                    child: Icon(Icons.sms_outlined, size: 32, color: theme.colorScheme.primary),
+                    backgroundImage: const AssetImage('assets/images/products/cow-milk.jpg'),
                   ),
                 ),
                 const SizedBox(height: 24),
