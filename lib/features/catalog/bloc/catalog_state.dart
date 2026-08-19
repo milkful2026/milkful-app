@@ -25,6 +25,7 @@ class CatalogState extends Equatable {
     this.status = CatalogStatus.initial,
     this.categories = const [],
     this.selectedCategoryId,
+    this.showingAll = false,
     this.products = const [],
     this.searchActive = false,
     this.searchQuery = '',
@@ -36,6 +37,13 @@ class CatalogState extends Equatable {
   final CatalogStatus status;
   final List<Category> categories;
   final String? selectedCategoryId;
+
+  /// The header's horizontal "All" pill — browses every category at once
+  /// (via `GET /search` with no category filter) rather than one
+  /// category's `GET /products`. Kept separate from [selectedCategoryId]
+  /// rather than nulling it out, since a `copyWith(String? x)`'s `?? `
+  /// pattern can't distinguish "clear this" from "leave it alone".
+  final bool showingAll;
   final List<Product> products;
 
   /// FR-5: whether the search field is currently shown (tapped the search
@@ -58,6 +66,7 @@ class CatalogState extends Equatable {
     CatalogStatus? status,
     List<Category>? categories,
     String? selectedCategoryId,
+    bool? showingAll,
     List<Product>? products,
     bool? searchActive,
     String? searchQuery,
@@ -69,6 +78,7 @@ class CatalogState extends Equatable {
         status: status ?? this.status,
         categories: categories ?? this.categories,
         selectedCategoryId: selectedCategoryId ?? this.selectedCategoryId,
+        showingAll: showingAll ?? this.showingAll,
         products: products ?? this.products,
         searchActive: searchActive ?? this.searchActive,
         searchQuery: searchQuery ?? this.searchQuery,
@@ -82,6 +92,7 @@ class CatalogState extends Equatable {
         status,
         categories,
         selectedCategoryId,
+        showingAll,
         products,
         searchActive,
         searchQuery,

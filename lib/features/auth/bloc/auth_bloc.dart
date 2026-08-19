@@ -24,6 +24,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LoginOtpVerifyRequested>(_onLoginOtpVerifyRequested);
     on<SessionBootstrapRequested>(_onSessionBootstrapRequested);
     on<LogoutRequested>(_onLogoutRequested);
+    on<ProfileRefreshRequested>(_onProfileRefreshRequested);
     on<AuthReset>((event, emit) => emit(const AuthInitial()));
   }
 
@@ -175,7 +176,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         refreshToken: tokens.refreshToken,
         accessTokenExpiresAt: tokens.expiresAt,
       );
-      emit(AuthAuthenticated(accountType: await _resolveAccountType()));
+      final profile = await _resolveProfile();
+      emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
     } on ApiException catch (e) {
       emit(
         AuthOtpVerifyFailure(
@@ -235,7 +237,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
     }
-    emit(AuthAuthenticated(accountType: await _resolveAccountType()));
+    final profile = await _resolveProfile();
+    emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
   }
 
   Future<void> _onLogoutRequested(LogoutRequested event, Emitter<AuthState> emit) async {
@@ -253,15 +256,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const AuthInitial());
   }
 
+  /// Dispatched right after registration finishes — the only way this
+  /// bloc's own `name`/`accountType` catch up on the fresh-signup path,
+  /// since `_onOtpVerifyRequested` deliberately skips the profile lookup
+  /// (the profile doesn't exist yet at that point). A no-op unless already
+  /// authenticated.
+  Future<void> _onProfileRefreshRequested(
+    ProfileRefreshRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (state is! AuthAuthenticated) return;
+    final profile = await _resolveProfile();
+    emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+  }
+
   /// FR-4: a failed profile lookup must never block reaching Home —
-  /// returns null (degrades to a B2C-equivalent view) instead of
-  /// propagating.
-  Future<String?> _resolveAccountType() async {
+  /// returns nulls (degrades to a B2C-equivalent, name-less view) instead
+  /// of propagating.
+  Future<({String? accountType, String? name})> _resolveProfile() async {
     try {
       final profile = await _profileRepository.getMe();
-      return profile.accountType;
+      return (accountType: profile.accountType, name: profile.name);
     } catch (_) {
-      return null;
+      return (accountType: null, name: null);
     }
   }
 }

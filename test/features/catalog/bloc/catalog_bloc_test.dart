@@ -152,35 +152,51 @@ void main() {
     );
 
     blocTest<CatalogBloc, CatalogState>(
-      'SearchModeEntered flips searchActive without re-fetching (FR-5)',
+      'AllProductsSelected browses every category via search with no category filter',
       build: () {
         repository
-          ..categories = const [_milkCategory]
+          ..categories = const [_milkCategory, _curdCategory]
           ..productsByCategory = {
             'milk': [_cowMilk],
-          };
+          }
+          ..searchResults = const [_cowMilk];
         return build();
       },
       act: (bloc) async {
         bloc.add(const CatalogStarted());
         await Future<void>.delayed(Duration.zero);
-        bloc.add(const SearchModeEntered());
+        bloc.add(const AllProductsSelected());
       },
       wait: const Duration(milliseconds: 10),
-      expect: () => [
-        isA<CatalogState>().having((s) => s.status, 'status', CatalogStatus.loading),
-        isA<CatalogState>()
-            .having((s) => s.categories.length, 'categories', 1)
-            .having((s) => s.selectedCategoryId, 'selectedCategoryId', 'milk')
-            .having((s) => s.status, 'status', CatalogStatus.loading),
-        isA<CatalogState>()
-            .having((s) => s.status, 'status', CatalogStatus.loaded)
-            .having((s) => s.products, 'products', [_cowMilk]),
-        isA<CatalogState>().having((s) => s.searchActive, 'searchActive', isTrue),
-      ],
-      verify: (_) {
-        // No extra fetch beyond CatalogStarted's own.
-        expect(repository.requestedCategoryIds, ['milk']);
+      verify: (bloc) {
+        expect(bloc.state.showingAll, isTrue);
+        expect(repository.searchFilters.last?.categoryIds, isEmpty);
+      },
+    );
+
+    blocTest<CatalogBloc, CatalogState>(
+      'CategorySelected after AllProductsSelected drops showingAll back to a plain category browse',
+      build: () {
+        repository
+          ..categories = const [_milkCategory, _curdCategory]
+          ..productsByCategory = {
+            'milk': [_cowMilk],
+            'curd': [],
+          }
+          ..searchResults = const [_cowMilk];
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const CatalogStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const AllProductsSelected());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const CategorySelected('curd'));
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.showingAll, isFalse);
+        expect(bloc.state.selectedCategoryId, 'curd');
       },
     );
 

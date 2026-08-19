@@ -86,3 +86,13 @@ class SessionBootstrapRequested extends AuthEvent {
 class LogoutRequested extends AuthEvent {
   const LogoutRequested();
 }
+
+/// Re-fetches GET /users/me and updates the current AuthAuthenticated
+/// state's `name`/`accountType` — dispatched once registration finishes
+/// (the earlier OTP-verify-during-signup path deliberately skips the
+/// profile lookup, since the profile doesn't exist yet at that point), so
+/// Home's "Welcome, {name}" greeting has a real name to show without a
+/// second, separate profile-fetch mechanism living outside AuthBloc.
+class ProfileRefreshRequested extends AuthEvent {
+  const ProfileRefreshRequested();
+}

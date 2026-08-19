@@ -33,28 +33,14 @@ void main() {
         RegistrationBloc(repository: repository, draftStorage: draftStorage);
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'NameSubmitted stores the name and advances to the address step',
-      build: build,
-      act: (bloc) => bloc.add(const NameSubmitted('Priya Sharma')),
-      expect: () => [
-        isA<RegistrationState>()
-            .having((s) => s.draft.name, 'name', 'Priya Sharma')
-            .having((s) => s.phase, 'phase', RegistrationPhase.address),
-      ],
-      verify: (_) => expect(draftStorage.saved?.name, 'Priya Sharma'),
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'AddressSubmitted for a serviceable address loads slots and lands on the slot step',
+      'AddressSubmitted for a serviceable address confirms the zone and '
+      'lands on the Home screen\'s awaitingName step (no separate slot step)',
       build: () {
         repository.serviceabilityResult = const ServiceabilityResult(
           serviceable: true,
           zoneId: 'blr-central',
           zoneName: 'Bangalore Central',
         );
-        repository.slots = const [
-          DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM', available: true),
-        ];
         return build();
       },
       act: (bloc) => bloc.add(const AddressSubmitted(_address)),
@@ -62,16 +48,13 @@ void main() {
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.loadingSlots)
+            .having((s) => s.phase, 'phase', RegistrationPhase.awaitingName)
             .having((s) => s.draft.zoneId, 'zoneId', 'blr-central'),
-        isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.slot)
-            .having((s) => s.availableSlots.length, 'slot count', 1),
       ],
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'AddressSubmitted for a non-serviceable address lands on notServiceable, not slot',
+      'AddressSubmitted for a non-serviceable address lands on notServiceable',
       build: () {
         repository.serviceabilityResult = const ServiceabilityResult(
           serviceable: false,
@@ -114,49 +97,26 @@ void main() {
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.loadingSlots),
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.slot),
+            .having((s) => s.phase, 'phase', RegistrationPhase.awaitingName)
+            .having((s) => s.draft.zoneId, 'zoneId', 'z1'),
       ],
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'SlotSelected stores the slot and advances to consent',
+      'NameSubmitted registers with implicit consent (no dedicated consent '
+      'step) and no preferredSlotId, then clears the draft',
       build: build,
-      act: (bloc) => bloc.add(const SlotSelected('morning-6-8')),
+      seed: () => RegistrationState.initial().copyWith(
+        draft: const RegistrationDraft(address: _address, zoneId: 'blr-central'),
+        phase: RegistrationPhase.awaitingName,
+      ),
+      act: (bloc) => bloc.add(const NameSubmitted('Priya Sharma')),
       expect: () => [
         isA<RegistrationState>()
-            .having((s) => s.draft.slotId, 'slotId', 'morning-6-8')
-            .having((s) => s.phase, 'phase', RegistrationPhase.consent),
-      ],
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'RegistrationSubmitted without both mandatory consents is a no-op',
-      build: build,
-      seed: () => RegistrationState.initial().copyWith(
-        draft: const RegistrationDraft(termsAccepted: true, privacyAccepted: false),
-        phase: RegistrationPhase.consent,
-      ),
-      act: (bloc) => bloc.add(const RegistrationSubmitted()),
-      expect: () => <RegistrationState>[],
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'RegistrationSubmitted with both mandatory consents submits and clears the draft',
-      build: build,
-      seed: () => RegistrationState.initial().copyWith(
-        draft: const RegistrationDraft(
-          name: 'Priya Sharma',
-          address: _address,
-          slotId: 'morning-6-8',
-          termsAccepted: true,
-          privacyAccepted: true,
-        ),
-        phase: RegistrationPhase.consent,
-      ),
-      act: (bloc) => bloc.add(const RegistrationSubmitted()),
-      expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.submitting),
+            .having((s) => s.phase, 'phase', RegistrationPhase.submitting)
+            .having((s) => s.draft.name, 'name', 'Priya Sharma')
+            .having((s) => s.draft.termsAccepted, 'termsAccepted', isTrue)
+            .having((s) => s.draft.privacyAccepted, 'privacyAccepted', isTrue),
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.success)
             .having((s) => s.result?.userId, 'userId', 'user-1'),
@@ -168,7 +128,7 @@ void main() {
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'RegistrationSubmitted failure lands on submitFailed with the backend message',
+      'NameSubmitted failure lands on submitFailed with the backend message',
       build: () {
         repository.registerException = const ApiException(
           errorCode: 'NOT_SERVICEABLE',
@@ -177,16 +137,10 @@ void main() {
         return build();
       },
       seed: () => RegistrationState.initial().copyWith(
-        draft: const RegistrationDraft(
-          name: 'Priya Sharma',
-          address: _address,
-          slotId: 'morning-6-8',
-          termsAccepted: true,
-          privacyAccepted: true,
-        ),
-        phase: RegistrationPhase.consent,
+        draft: const RegistrationDraft(address: _address, zoneId: 'blr-central'),
+        phase: RegistrationPhase.awaitingName,
       ),
-      act: (bloc) => bloc.add(const RegistrationSubmitted()),
+      act: (bloc) => bloc.add(const NameSubmitted('Priya Sharma')),
       expect: () => [
         isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.submitting),
         isA<RegistrationState>()
@@ -196,74 +150,68 @@ void main() {
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'DraftRestored with no saved draft starts fresh at the name step',
-      build: build,
-      act: (bloc) => bloc.add(const DraftRestored(null)),
-      expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.name),
-      ],
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'DraftRestored with a partial draft (name only) resumes at the address step',
-      build: build,
-      act: (bloc) => bloc.add(
-        const DraftRestored(RegistrationDraft(name: 'Priya Sharma')),
-      ),
-      expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
-      ],
-    );
-
-    blocTest<RegistrationBloc, RegistrationState>(
-      'DraftRestored with name, address and a confirmed zone but no slot '
-      'reloads slots and resumes at the slot step',
+      'DeliverySlotsRequested loads slots for Home\'s calendar picker',
       build: () {
         repository.slots = const [
-          DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM', available: true),
+          DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM'),
         ];
         return build();
       },
-      act: (bloc) => bloc.add(
-        const DraftRestored(
-          RegistrationDraft(name: 'Priya Sharma', address: _address, zoneId: 'blr-central'),
-        ),
-      ),
+      act: (bloc) => bloc.add(const DeliverySlotsRequested('blr-central')),
       expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.loadingSlots),
-        isA<RegistrationState>()
-            .having((s) => s.phase, 'phase', RegistrationPhase.slot)
-            .having((s) => s.availableSlots.length, 'slot count', 1),
+        isA<RegistrationState>().having((s) => s.availableSlots.length, 'slot count', 1),
       ],
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'DraftRestored with name, address and no zone (serviceability never '
-      'confirmed) resumes at the address step rather than crashing on a null zoneId',
+      'DeliverySlotsRequested failure leaves the picker with an empty list, not a crash',
+      build: () {
+        repository.slotsException = const ApiException(errorCode: 'BOOM', message: 'boom');
+        return build();
+      },
+      act: (bloc) => bloc.add(const DeliverySlotsRequested('blr-central')),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.availableSlots, 'slots', isEmpty),
+      ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with no saved draft starts fresh at the address step',
       build: build,
-      act: (bloc) => bloc.add(
-        const DraftRestored(RegistrationDraft(name: 'Priya Sharma', address: _address)),
-      ),
+      act: (bloc) => bloc.add(const DraftRestored(null)),
       expect: () => [
         isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
       ],
     );
 
     blocTest<RegistrationBloc, RegistrationState>(
-      'DraftRestored with name, address and slot already chosen resumes at consent',
+      'DraftRestored with no address resumes at the address step',
+      build: build,
+      act: (bloc) => bloc.add(const DraftRestored(RegistrationDraft(mobile: '+919876543210'))),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
+      ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with an address but no confirmed zone resumes at the '
+      'address step rather than crashing on a null zoneId',
+      build: build,
+      act: (bloc) => bloc.add(const DraftRestored(RegistrationDraft(address: _address))),
+      expect: () => [
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.address),
+      ],
+    );
+
+    blocTest<RegistrationBloc, RegistrationState>(
+      'DraftRestored with an address and a confirmed zone (registration '
+      'interrupted before completing) resumes at awaitingName',
       build: build,
       act: (bloc) => bloc.add(
-        const DraftRestored(
-          RegistrationDraft(
-            name: 'Priya Sharma',
-            address: _address,
-            zoneId: 'blr-central',
-            slotId: 'morning-6-8',
-          ),
-        ),
+        const DraftRestored(RegistrationDraft(address: _address, zoneId: 'blr-central')),
       ),
       expect: () => [
-        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.consent),
+        isA<RegistrationState>().having((s) => s.phase, 'phase', RegistrationPhase.awaitingName),
       ],
     );
   });

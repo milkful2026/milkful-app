@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -30,36 +28,10 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  final _searchController = TextEditingController();
-  Timer? _debounce;
-
   @override
   void initState() {
     super.initState();
     context.read<CatalogBloc>().add(const CatalogStarted());
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  // FR-5: debounced 300ms before dispatching to the bloc.
-  void _onSearchChanged(String query) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      context.read<CatalogBloc>().add(SearchQueryChanged(query));
-    });
-  }
-
-  // Cancels any pending debounced query first — otherwise a keystroke typed
-  // just before clearing could still fire 300ms later and undo the clear.
-  void _onSearchCleared() {
-    _debounce?.cancel();
-    _searchController.clear();
-    context.read<CatalogBloc>().add(const SearchCleared());
   }
 
   Future<void> _openFilterSheet(BuildContext context, CatalogState state) async {
@@ -110,23 +82,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
       builder: (context, state) {
         return Column(
           children: [
-            _TopControls(
+            _CategoryBar(
               state: state,
-              searchController: _searchController,
-              onSearchChanged: _onSearchChanged,
-              onSearchCleared: _onSearchCleared,
               onFilterTap: () => _openFilterSheet(context, state),
               onSortTap: () => _openSortMenu(context),
             ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _CategoryRail(state: state),
-                  Expanded(child: _CatalogBody(state: state)),
-                ],
-              ),
-            ),
+            Expanded(child: _CatalogBody(state: state)),
           ],
         );
       },
@@ -134,89 +95,61 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 }
 
-class _TopControls extends StatelessWidget {
-  const _TopControls({
-    required this.state,
-    required this.searchController,
-    required this.onSearchChanged,
-    required this.onSearchCleared,
-    required this.onFilterTap,
-    required this.onSortTap,
-  });
+/// Horizontal category bar — "All" first, then every real category, plus
+/// the filter/sort icons trailing the row. Search itself lives in Home's
+/// own header now (a single persistent field, not a toggled-in one), since
+/// it dispatches to this same [CatalogBloc] instance regardless of which
+/// widget renders the field.
+class _CategoryBar extends StatelessWidget {
+  const _CategoryBar({required this.state, required this.onFilterTap, required this.onSortTap});
 
   final CatalogState state;
-  final TextEditingController searchController;
-  final ValueChanged<String> onSearchChanged;
-  final VoidCallback onSearchCleared;
   final VoidCallback onFilterTap;
   final VoidCallback onSortTap;
+
+  IconData _iconFor(String? iconName) => switch (iconName) {
+        'milk' => Icons.local_drink,
+        'curd' => Icons.icecream_outlined,
+        'paneer' => Icons.layers,
+        'ghee' => Icons.opacity,
+        'veggies' => Icons.eco,
+        _ => Icons.storefront,
+      };
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Expanded(
-            child: state.searchActive
-                ? Semantics(
-                    label: 'Search products',
-                    child: TextField(
-                      key: const Key('catalog-search-field'),
-                      controller: searchController,
-                      autofocus: true,
-                      onChanged: onSearchChanged,
-                      decoration: InputDecoration(
-                        hintText: 'Search products',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.close),
-                          // FR-5: empty query reverts to category view —
-                          // SearchCleared (not SearchQueryChanged) is what
-                          // actually drops search-active mode itself.
-                          onPressed: onSearchCleared,
-                        ),
-                      ),
-                    ),
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          state.selectedCategory?.name ?? '',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (state.status == CatalogStatus.loaded)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Text(
-                            '${state.products.length} items',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: Colors.grey.shade600),
-                          ),
-                        ),
-                    ],
+            child: SizedBox(
+              key: const Key('category-bar'),
+              height: 96,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _CategoryPill(
+                    categoryKey: 'category-all',
+                    label: 'All',
+                    icon: Icons.apps,
+                    selected: state.showingAll,
+                    onTap: () => context.read<CatalogBloc>().add(const AllProductsSelected()),
                   ),
-          ),
-          if (!state.searchActive)
-            IconButton(
-              key: const Key('catalog-search-toggle'),
-              icon: const Icon(Icons.search),
-              tooltip: 'Search',
-              // Just flips the bloc's searchActive flag, which is what
-              // swaps this header area over to the search field on the next
-              // build — no re-fetch needed since the query is still empty.
-              onPressed: () => context.read<CatalogBloc>().add(const SearchModeEntered()),
+                  for (final category in state.categories)
+                    _CategoryPill(
+                      categoryKey: 'category-${category.id}',
+                      label: category.name,
+                      icon: _iconFor(category.iconName),
+                      selected: !state.showingAll && category.id == state.selectedCategoryId,
+                      onTap: () =>
+                          context.read<CatalogBloc>().add(CategorySelected(category.id)),
+                    ),
+                ],
+              ),
             ),
+          ),
           IconButton(
             key: const Key('catalog-filter-toggle'),
             icon: Badge(
@@ -239,63 +172,54 @@ class _TopControls extends StatelessWidget {
   }
 }
 
-class _CategoryRail extends StatelessWidget {
-  const _CategoryRail({required this.state});
+class _CategoryPill extends StatelessWidget {
+  const _CategoryPill({
+    required this.categoryKey,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final CatalogState state;
-
-  IconData _iconFor(String? iconName) => switch (iconName) {
-        'milk' => Icons.local_drink,
-        'curd' => Icons.icecream_outlined,
-        'paneer' => Icons.layers,
-        'ghee' => Icons.opacity,
-        'veggies' => Icons.eco,
-        _ => Icons.storefront,
-      };
+  final String categoryKey;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (state.categories.isEmpty) return const SizedBox(width: 88);
-    return SizedBox(
-      key: const Key('category-rail'),
-      width: 88,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: state.categories.length,
-        itemBuilder: (context, index) {
-          final category = state.categories[index];
-          final selected = category.id == state.selectedCategoryId;
-          return Padding(
-            key: Key('category-${category.id}'),
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(40),
-              onTap: () => context.read<CatalogBloc>().add(CategorySelected(category.id)),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.primaryContainer,
-                    child: Icon(
-                      _iconFor(category.iconName),
-                      color: selected ? Colors.white : Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    category.name,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    return Padding(
+      key: Key(categoryKey),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(40),
+        onTap: onTap,
+        child: SizedBox(
+          width: 68,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  icon,
+                  color: selected ? Colors.white : Theme.of(context).colorScheme.primary,
+                ),
               ),
-            ),
-          );
-        },
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

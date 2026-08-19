@@ -4,15 +4,17 @@ import '../data/registration_repository.dart';
 import '../models/registration_draft.dart';
 
 enum RegistrationPhase {
-  name,
   address,
   checkingServiceability,
-  serviceable,
   notServiceable,
   serviceabilityCheckFailed,
-  loadingSlots,
-  slot,
-  consent,
+
+  /// Serviceability confirmed — the Home screen shows its inline "What
+  /// should we call you?" prompt (name and the old dedicated slot/consent
+  /// steps were folded in here; consent is implicit via the Welcome
+  /// screen's own footer text, and slot selection moved to Home's own
+  /// calendar picker, usable independently of registration completing).
+  awaitingName,
   submitting,
   success,
   submitFailed,
@@ -29,7 +31,7 @@ class RegistrationState extends Equatable {
 
   factory RegistrationState.initial() => const RegistrationState(
         draft: RegistrationDraft(),
-        phase: RegistrationPhase.name,
+        phase: RegistrationPhase.address,
       );
 
   final RegistrationDraft draft;

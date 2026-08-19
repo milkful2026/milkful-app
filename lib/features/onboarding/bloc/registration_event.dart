@@ -20,16 +20,6 @@ class DraftRestored extends RegistrationEvent {
   List<Object?> get props => [draft];
 }
 
-/// FR-4.
-class NameSubmitted extends RegistrationEvent {
-  const NameSubmitted(this.name);
-
-  final String name;
-
-  @override
-  List<Object?> get props => [name];
-}
-
 /// FR-5/6: manual-entry address; submitting it triggers the serviceability
 /// check automatically (this bloc, not the UI, owns that sequencing).
 class AddressSubmitted extends RegistrationEvent {
@@ -48,33 +38,29 @@ class ServiceabilityRetryRequested extends RegistrationEvent {
   const ServiceabilityRetryRequested();
 }
 
-/// FR-7.
-class SlotSelected extends RegistrationEvent {
-  const SlotSelected(this.slotId);
+/// The Home screen's inline "What should we call you?" prompt, shown once
+/// serviceability is confirmed — this is now also the final-submit
+/// trigger: Terms & Privacy consent is implicit (the Welcome screen's own
+/// "by continuing you agree..." footer), so there's no separate consent
+/// step gating this the way there used to be. Submitting a name calls
+/// `POST /users/register` directly.
+class NameSubmitted extends RegistrationEvent {
+  const NameSubmitted(this.name);
 
-  final String slotId;
-
-  @override
-  List<Object?> get props => [slotId];
-}
-
-/// FR-8.
-class ConsentUpdated extends RegistrationEvent {
-  const ConsentUpdated({
-    required this.termsAccepted,
-    required this.privacyAccepted,
-    required this.pushConsent,
-  });
-
-  final bool termsAccepted;
-  final bool privacyAccepted;
-  final bool pushConsent;
+  final String name;
 
   @override
-  List<Object?> get props => [termsAccepted, privacyAccepted, pushConsent];
+  List<Object?> get props => [name];
 }
 
-/// FR-8/9: final submit.
-class RegistrationSubmitted extends RegistrationEvent {
-  const RegistrationSubmitted();
+/// Fetches delivery slots for the Home screen's own calendar-style slot
+/// picker — independent of registration completing; a returning user with
+/// a known zone can dispatch this any time, not just mid-onboarding.
+class DeliverySlotsRequested extends RegistrationEvent {
+  const DeliverySlotsRequested(this.zoneId);
+
+  final String zoneId;
+
+  @override
+  List<Object?> get props => [zoneId];
 }

@@ -7,10 +7,13 @@ import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
 import 'package:milkful_app/features/auth/bloc/auth_event.dart';
 import 'package:milkful_app/features/auth/bloc/auth_state.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
+import 'package:milkful_app/features/onboarding/bloc/registration_bloc.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 import '../../fakes/fake_catalog_repository.dart';
+import '../../fakes/fake_draft_storage.dart';
 import '../../fakes/fake_profile_repository.dart';
+import '../../fakes/fake_registration_repository.dart';
 import '../../fakes/fake_secure_token_storage.dart';
 
 void main() {
@@ -21,7 +24,16 @@ void main() {
         value: FakeCatalogRepository(),
         child: BlocProvider<AuthBloc>.value(
           value: authBloc,
-          child: MaterialApp.router(routerConfig: router),
+          child: BlocProvider<RegistrationBloc>(
+            // Home now reads this directly (the inline name prompt +
+            // calendar picker), so any test that can route to /home needs
+            // one provided, same as the real app's MultiBlocProvider.
+            create: (_) => RegistrationBloc(
+              repository: FakeRegistrationRepository(),
+              draftStorage: FakeDraftStorage(),
+            ),
+            child: MaterialApp.router(routerConfig: router),
+          ),
         ),
       );
 

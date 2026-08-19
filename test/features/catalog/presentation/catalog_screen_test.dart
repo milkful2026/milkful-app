@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:milkful_app/features/catalog/bloc/catalog_bloc.dart';
+import 'package:milkful_app/features/catalog/bloc/catalog_event.dart';
 import 'package:milkful_app/features/catalog/models/category.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/catalog/presentation/catalog_screen.dart';
@@ -77,13 +78,44 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('category rail renders and defaults to the first category (FR-1)', (tester) async {
+  testWidgets('category bar renders (with All) and defaults to the first category (FR-1)', (
+    tester,
+  ) async {
     await pumpCatalog(tester);
 
-    expect(find.byKey(const Key('category-rail')), findsOneWidget);
+    expect(find.byKey(const Key('category-bar')), findsOneWidget);
+    expect(find.byKey(const Key('category-all')), findsOneWidget);
     expect(find.byKey(const Key('category-milk')), findsOneWidget);
     expect(find.byKey(const Key('category-curd')), findsOneWidget);
     expect(find.byKey(const Key('product-card-cow-milk')), findsOneWidget);
+  });
+
+  testWidgets('tapping All browses every category at once (FR-1)', (tester) async {
+    repository = FakeCatalogRepository(
+      categories: const [_milkCategory, _curdCategory],
+      productsByCategory: {
+        'milk': [_cowMilk],
+        'curd': [_outOfStockCurd],
+      },
+      searchResults: const [_cowMilk, _outOfStockCurd],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BlocProvider(
+            create: (_) => CatalogBloc(repository: repository),
+            child: const CatalogScreen(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('category-all')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('product-card-cow-milk')), findsOneWidget);
+    expect(find.byKey(const Key('product-card-curd-500g')), findsOneWidget);
   });
 
   testWidgets('tapping a category switches the product list (FR-1)', (tester) async {
@@ -179,9 +211,13 @@ void main() {
     expect(find.byKey(const Key('subscription-badge-cow-milk')), findsNothing);
   });
 
-  testWidgets('search: typing filters via search, clearing reverts to the category view (FR-5)', (
-    tester,
-  ) async {
+  // Search itself is now a Home-screen concern (a persistent header field
+  // dispatching straight to this same CatalogBloc — see home_screen.dart
+  // and catalog_bloc_test.dart's own SearchQueryChanged/SearchCleared
+  // coverage) — CatalogScreen no longer owns a search field to drive
+  // through the UI, so these exercise the same events a step lower, still
+  // asserting on this screen's own rendering of the results.
+  testWidgets('a typed search query is reflected in the product list (FR-5)', (tester) async {
     repository = FakeCatalogRepository(
       categories: const [_milkCategory],
       productsByCategory: {
@@ -189,11 +225,12 @@ void main() {
       },
       searchResults: const [_cowMilk],
     );
+    late CatalogBloc bloc;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: BlocProvider(
-            create: (_) => CatalogBloc(repository: repository),
+            create: (_) => bloc = CatalogBloc(repository: repository),
             child: const CatalogScreen(),
           ),
         ),
@@ -201,26 +238,16 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('catalog-search-toggle')));
-    await tester.pump();
-    expect(find.byKey(const Key('catalog-search-field')), findsOneWidget);
-    // Entering search mode alone shouldn't have triggered a re-fetch.
-    expect(repository.searchQueries, isEmpty);
-
-    await tester.enterText(find.byKey(const Key('catalog-search-field')), 'cow');
-    await tester.pump(const Duration(milliseconds: 350)); // clears the 300ms debounce
+    bloc.add(const SearchQueryChanged('cow'));
     await tester.pump();
 
     expect(repository.searchQueries, contains('cow'));
+    expect(find.byKey(const Key('product-card-cow-milk')), findsOneWidget);
 
-    // Clearing (the field's own "X" button) must actually drop search mode
-    // — the search field disappears and the toggle icon/category header
-    // come back, not just the query text.
-    await tester.tap(find.byIcon(Icons.close));
+    bloc.add(const SearchCleared());
     await tester.pump();
 
-    expect(find.byKey(const Key('catalog-search-field')), findsNothing);
-    expect(find.byKey(const Key('catalog-search-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('product-card-cow-milk')), findsOneWidget);
   });
 
   testWidgets('search with no matches shows the empty-search state (FR-5)', (tester) async {
@@ -231,11 +258,12 @@ void main() {
       },
       searchResults: const [],
     );
+    late CatalogBloc bloc;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: BlocProvider(
-            create: (_) => CatalogBloc(repository: repository),
+            create: (_) => bloc = CatalogBloc(repository: repository),
             child: const CatalogScreen(),
           ),
         ),
@@ -243,10 +271,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('catalog-search-toggle')));
-    await tester.pump();
-    await tester.enterText(find.byKey(const Key('catalog-search-field')), 'nonsense');
-    await tester.pump(const Duration(milliseconds: 350));
+    bloc.add(const SearchQueryChanged('nonsense'));
     await tester.pump();
 
     expect(find.byKey(const Key('search-empty-state')), findsOneWidget);

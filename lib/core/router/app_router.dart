@@ -9,17 +9,16 @@ import '../../features/auth/presentation/login_otp_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
-import '../../features/onboarding/presentation/consent_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
-import '../../features/onboarding/presentation/profile_screen.dart';
-import '../../features/onboarding/presentation/slot_screen.dart';
-import '../../features/onboarding/presentation/success_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
 
 /// Route list covers both specs' screen flows:
-/// Welcome → Sign Up → OTP Verify → Name → Address → Slot → Consent →
-/// Success (MA-1), and Login → Login OTP Verify (MA-21) — both landing on
-/// Home.
+/// Welcome → Sign Up → OTP Verify → Address → Home (MA-1) — Name, delivery
+/// slot, and consent no longer have their own wizard steps: Home's own
+/// inline prompt collects the name (implicitly consenting via Welcome's
+/// "by continuing..." footer) and finishes registration, and delivery
+/// slot selection lives in Home's own calendar picker, choosable any
+/// time — and Login → Login OTP Verify (MA-21) — both landing on Home.
 ///
 /// Redirect guard is deliberately narrow: it only governs `/` and `/home`,
 /// not the registration wizard's internal steps nor `/login`.
@@ -66,11 +65,7 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       // login_screen.dart/login_screen_test.dart.
       GoRoute(path: '/signup', builder: (context, state) => const WelcomeScreen()),
       GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
-      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/address', builder: (context, state) => const AddressScreen()),
-      GoRoute(path: '/slot', builder: (context, state) => const SlotScreen()),
-      GoRoute(path: '/consent', builder: (context, state) => const ConsentScreen()),
-      GoRoute(path: '/success', builder: (context, state) => const SuccessScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/login/otp', builder: (context, state) => const LoginOtpScreen()),
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),

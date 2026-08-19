@@ -258,7 +258,7 @@ void main() {
       act: (bloc) => bloc.add(const LoginOtpVerifyRequested('123456')),
       expect: () => [
         const AuthOtpVerifying(mobile: '+919876543210', requestId: 'login-req-1'),
-        const AuthAuthenticated(accountType: 'B2C'),
+        const AuthAuthenticated(accountType: 'B2C', name: 'Priya Sharma'),
       ],
       verify: (_) {
         expect(tokenStorage.accessToken, 'login-access-token');
@@ -335,7 +335,10 @@ void main() {
         return build();
       },
       act: (bloc) => bloc.add(const SessionBootstrapRequested()),
-      expect: () => [const AuthBootstrapping(), const AuthAuthenticated(accountType: 'B2C')],
+      expect: () => [
+        const AuthBootstrapping(),
+        const AuthAuthenticated(accountType: 'B2C', name: 'Priya Sharma'),
+      ],
       verify: (_) => expect(repository.refreshedWith, isEmpty),
     );
 
@@ -348,7 +351,10 @@ void main() {
         return build();
       },
       act: (bloc) => bloc.add(const SessionBootstrapRequested()),
-      expect: () => [const AuthBootstrapping(), const AuthAuthenticated(accountType: 'B2C')],
+      expect: () => [
+        const AuthBootstrapping(),
+        const AuthAuthenticated(accountType: 'B2C', name: 'Priya Sharma'),
+      ],
       verify: (_) {
         expect(repository.refreshedWith, ['stored-refresh']);
         expect(tokenStorage.accessToken, 'refreshed-access-token');

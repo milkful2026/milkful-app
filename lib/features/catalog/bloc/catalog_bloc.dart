@@ -18,8 +18,8 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     // in-flight response for a stale selection can land after (and
     // overwrite) a newer one.
     on<CategorySelected>(_onCategorySelected, transformer: restartable());
+    on<AllProductsSelected>(_onAllProductsSelected, transformer: restartable());
     on<SearchQueryChanged>(_onSearchQueryChanged, transformer: restartable());
-    on<SearchModeEntered>(_onSearchModeEntered);
     on<SearchCleared>(_onSearchCleared, transformer: restartable());
     on<FiltersApplied>(_onFiltersApplied, transformer: restartable());
     on<SortChanged>(_onSortChanged, transformer: restartable());
@@ -51,6 +51,22 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     emit(
       state.copyWith(
         selectedCategoryId: event.categoryId,
+        showingAll: false,
+        searchActive: false,
+        searchQuery: '',
+        filters: const CatalogFilters(),
+      ),
+    );
+    await _fetch(emit);
+  }
+
+  Future<void> _onAllProductsSelected(
+    AllProductsSelected event,
+    Emitter<CatalogState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        showingAll: true,
         searchActive: false,
         searchQuery: '',
         filters: const CatalogFilters(),
@@ -62,10 +78,6 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
   Future<void> _onSearchQueryChanged(SearchQueryChanged event, Emitter<CatalogState> emit) async {
     emit(state.copyWith(searchActive: true, searchQuery: event.query));
     await _fetch(emit);
-  }
-
-  void _onSearchModeEntered(SearchModeEntered event, Emitter<CatalogState> emit) {
-    emit(state.copyWith(searchActive: true));
   }
 
   Future<void> _onSearchCleared(SearchCleared event, Emitter<CatalogState> emit) async {
@@ -107,14 +119,23 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
   Future<void> _fetch(Emitter<CatalogState> emit) async {
     emit(state.copyWith(status: CatalogStatus.loading));
     try {
-      final usesSearchPath =
-          state.searchQuery.isNotEmpty || !state.filters.isEmpty || state.sort != null;
+      final usesSearchPath = state.showingAll ||
+          state.searchQuery.isNotEmpty ||
+          !state.filters.isEmpty ||
+          state.sort != null;
       final products = usesSearchPath
           ? await _repository.search(
               query: state.searchQuery.isEmpty ? null : state.searchQuery,
-              filters: state.filters.categoryIds.isEmpty && state.selectedCategoryId != null
-                  ? state.filters.copyWith(categoryIds: [state.selectedCategoryId!])
-                  : state.filters,
+              // "All" deliberately carries no implicit category filter —
+              // that's the whole point of the pill. Every other search-path
+              // trigger (typed query, an explicit filter, a sort) still
+              // narrows to the selected rail category when the caller
+              // didn't already specify one.
+              filters: state.showingAll
+                  ? state.filters
+                  : state.filters.categoryIds.isEmpty && state.selectedCategoryId != null
+                      ? state.filters.copyWith(categoryIds: [state.selectedCategoryId!])
+                      : state.filters,
               sort: state.sort,
             )
           : state.selectedCategoryId == null

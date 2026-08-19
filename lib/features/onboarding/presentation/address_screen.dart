@@ -232,13 +232,15 @@ class _AddressScreenState extends State<AddressScreen> {
       extendBodyBehindAppBar: true,
       body: BlocConsumer<RegistrationBloc, RegistrationState>(
         listener: (context, state) {
-          if (state.phase == RegistrationPhase.slot) {
-            context.go('/slot');
+          // Serviceability confirmed — Home shows the inline name prompt
+          // that finishes registration (name/consent/slot no longer have
+          // their own dedicated wizard steps).
+          if (state.phase == RegistrationPhase.awaitingName) {
+            context.go('/home');
           }
         },
         builder: (context, state) {
-          final checking = state.phase == RegistrationPhase.checkingServiceability ||
-              state.phase == RegistrationPhase.loadingSlots;
+          final checking = state.phase == RegistrationPhase.checkingServiceability;
           return Column(
             children: [
               Expanded(

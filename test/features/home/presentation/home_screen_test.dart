@@ -6,10 +6,13 @@ import 'package:milkful_app/features/auth/bloc/auth_event.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/home/presentation/home_screen.dart';
+import 'package:milkful_app/features/onboarding/bloc/registration_bloc.dart';
 
 import '../../../fakes/fake_auth_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
+import '../../../fakes/fake_draft_storage.dart';
 import '../../../fakes/fake_profile_repository.dart';
+import '../../../fakes/fake_registration_repository.dart';
 import '../../../fakes/fake_secure_token_storage.dart';
 
 void main() {
@@ -21,7 +24,13 @@ void main() {
         value: FakeCatalogRepository(),
         child: BlocProvider<AuthBloc>.value(
           value: authBloc,
-          child: const MaterialApp(home: HomeScreen()),
+          child: BlocProvider<RegistrationBloc>(
+            create: (_) => RegistrationBloc(
+              repository: FakeRegistrationRepository(),
+              draftStorage: FakeDraftStorage(),
+            ),
+            child: const MaterialApp(home: HomeScreen()),
+          ),
         ),
       );
 

@@ -66,7 +66,6 @@ class RegistrationDraft extends Equatable {
     this.name,
     this.address,
     this.zoneId,
-    this.slotId,
     this.termsAccepted = false,
     this.privacyAccepted = false,
     this.pushConsent = false,
@@ -77,7 +76,6 @@ class RegistrationDraft extends Equatable {
   final String? name;
   final AddressDraft? address;
   final String? zoneId;
-  final String? slotId;
   final bool termsAccepted;
   final bool privacyAccepted;
   final bool pushConsent;
@@ -88,7 +86,6 @@ class RegistrationDraft extends Equatable {
     String? name,
     AddressDraft? address,
     String? zoneId,
-    String? slotId,
     bool? termsAccepted,
     bool? privacyAccepted,
     bool? pushConsent,
@@ -99,7 +96,6 @@ class RegistrationDraft extends Equatable {
         name: name ?? this.name,
         address: address ?? this.address,
         zoneId: zoneId ?? this.zoneId,
-        slotId: slotId ?? this.slotId,
         termsAccepted: termsAccepted ?? this.termsAccepted,
         privacyAccepted: privacyAccepted ?? this.privacyAccepted,
         pushConsent: pushConsent ?? this.pushConsent,
@@ -111,7 +107,6 @@ class RegistrationDraft extends Equatable {
         'name': name,
         'address': address?.toDraftJson(),
         'zoneId': zoneId,
-        'slotId': slotId,
         'termsAccepted': termsAccepted,
         'privacyAccepted': privacyAccepted,
         'pushConsent': pushConsent,
@@ -125,7 +120,6 @@ class RegistrationDraft extends Equatable {
             ? null
             : AddressDraft.fromDraftJson(json['address'] as Map<String, dynamic>),
         zoneId: json['zoneId'] as String?,
-        slotId: json['slotId'] as String?,
         termsAccepted: json['termsAccepted'] as bool? ?? false,
         privacyAccepted: json['privacyAccepted'] as bool? ?? false,
         pushConsent: json['pushConsent'] as bool? ?? false,
@@ -138,7 +132,6 @@ class RegistrationDraft extends Equatable {
         name,
         address,
         zoneId,
-        slotId,
         termsAccepted,
         privacyAccepted,
         pushConsent,

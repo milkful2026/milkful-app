@@ -3,16 +3,22 @@ import '../../../core/network/api_client.dart';
 import '../models/registration_draft.dart';
 
 class DeliverySlot {
-  const DeliverySlot({required this.id, required this.label, required this.available});
+  const DeliverySlot({required this.id, required this.label, this.available = true});
 
   final String id;
   final String label;
   final bool available;
 
+  // Shared by two endpoints with different contracts: User's own
+  // GET /delivery/slots includes `available` per slot, but Inventory's
+  // GET /v1/serviceability/check embeds slots without it (every slot it
+  // returns is implicitly available — see that service's own
+  // `result_to_dict`, which never serializes the field at all). Defaults
+  // to true rather than requiring it, so the latter doesn't fail to parse.
   factory DeliverySlot.fromJson(Map<String, dynamic> json) => DeliverySlot(
         id: json['id'] as String,
         label: json['label'] as String,
-        available: json['available'] as bool,
+        available: json['available'] as bool? ?? true,
       );
 }
 
@@ -130,7 +136,8 @@ class DioRegistrationRepository implements RegistrationRepository {
       body: {
         'name': draft.name,
         'addresses': [address.toRegisterJson()],
-        if (draft.slotId != null) 'preferredSlotId': draft.slotId,
+        // No preferredSlotId — slot preference is now chosen later, from
+        // Home's own calendar picker, independent of registration.
         'consents': [
           {'type': 'TERMS', 'accepted': draft.termsAccepted, 'acceptedAt': acceptedAt},
           {'type': 'PRIVACY', 'accepted': draft.privacyAccepted, 'acceptedAt': acceptedAt},

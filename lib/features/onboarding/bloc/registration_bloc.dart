@@ -15,12 +15,10 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
         _draftStorage = draftStorage,
         super(RegistrationState.initial()) {
     on<DraftRestored>(_onDraftRestored);
-    on<NameSubmitted>(_onNameSubmitted);
     on<AddressSubmitted>(_onAddressSubmitted);
     on<ServiceabilityRetryRequested>(_onServiceabilityRetry);
-    on<SlotSelected>(_onSlotSelected);
-    on<ConsentUpdated>(_onConsentUpdated);
-    on<RegistrationSubmitted>(_onRegistrationSubmitted);
+    on<NameSubmitted>(_onNameSubmitted);
+    on<DeliverySlotsRequested>(_onDeliverySlotsRequested);
   }
 
   final RegistrationRepository _repository;
@@ -31,39 +29,23 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
   // FR-10: resume at the first step with missing required data, not a
   // literal saved "screen index" — simpler and self-healing if a field was
   // cleared between sessions. Emits exactly one *settled* phase (never
-  // `checkingServiceability`/`loadingSlots`) so callers awaiting the bloc's
-  // stream for a routing decision don't have to filter out transients.
+  // `checkingServiceability`) so callers awaiting the bloc's stream for a
+  // routing decision don't have to filter out transients.
   Future<void> _onDraftRestored(DraftRestored event, Emitter<RegistrationState> emit) async {
     final draft = event.draft;
-    if (draft == null) {
-      emit(RegistrationState.initial());
+    if (draft == null || draft.address == null) {
+      emit(RegistrationState(draft: draft ?? const RegistrationDraft(), phase: RegistrationPhase.address));
       return;
     }
-    if (draft.name == null || draft.name!.isEmpty) {
-      emit(RegistrationState(draft: draft, phase: RegistrationPhase.name));
-      return;
-    }
-    if (draft.address == null) {
+    if (draft.zoneId == null) {
+      // Serviceability was never confirmed for this address — restart there.
       emit(RegistrationState(draft: draft, phase: RegistrationPhase.address));
       return;
     }
-    if (draft.slotId == null) {
-      if (draft.zoneId == null) {
-        // Serviceability was never confirmed for this address — restart there.
-        emit(RegistrationState(draft: draft, phase: RegistrationPhase.address));
-        return;
-      }
-      emit(RegistrationState(draft: draft, phase: RegistrationPhase.loadingSlots));
-      await _loadSlots(draft.zoneId!, emit);
-      return;
-    }
-    emit(RegistrationState(draft: draft, phase: RegistrationPhase.consent));
-  }
-
-  Future<void> _onNameSubmitted(NameSubmitted event, Emitter<RegistrationState> emit) async {
-    final draft = state.draft.copyWith(name: event.name);
-    await _persist(draft);
-    emit(state.copyWith(draft: draft, phase: RegistrationPhase.address));
+    // Address + a confirmed zone but the draft still exists on disk means
+    // registration itself never completed (a real success clears it) —
+    // resume at the Home screen's inline name prompt.
+    emit(RegistrationState(draft: draft, phase: RegistrationPhase.awaitingName));
   }
 
   Future<void> _onAddressSubmitted(
@@ -104,8 +86,7 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
       }
       final draft = state.draft.copyWith(zoneId: result.zoneId);
       await _persist(draft);
-      emit(state.copyWith(draft: draft, phase: RegistrationPhase.loadingSlots));
-      await _loadSlots(result.zoneId!, emit);
+      emit(state.copyWith(draft: draft, phase: RegistrationPhase.awaitingName));
     } on ApiException catch (e) {
       emit(state.copyWith(phase: RegistrationPhase.serviceabilityCheckFailed, errorMessage: e.message));
     } catch (_) {
@@ -120,57 +101,48 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
     }
   }
 
-  Future<void> _loadSlots(String zoneId, Emitter<RegistrationState> emit) async {
+  /// Terms & Privacy consent is implicit (Welcome screen's own "by
+  /// continuing you agree..." footer) — always marked accepted here rather
+  /// than gated behind a dedicated consent step. No `preferredSlotId` is
+  /// sent either; delivery-slot preference is chosen later, independently,
+  /// from Home's own calendar picker (see [DeliverySlotsRequested]) —
+  /// registration's own contract already treats that field as optional.
+  Future<void> _onNameSubmitted(NameSubmitted event, Emitter<RegistrationState> emit) async {
+    final draft = state.draft.copyWith(
+      name: event.name,
+      termsAccepted: true,
+      privacyAccepted: true,
+    );
+    emit(state.copyWith(draft: draft, phase: RegistrationPhase.submitting));
     try {
-      final slots = await _repository.getDeliverySlots(zoneId);
-      emit(state.copyWith(phase: RegistrationPhase.slot, availableSlots: slots));
+      final result = await _repository.register(draft);
+      await _draftStorage.clear();
+      emit(state.copyWith(draft: draft, phase: RegistrationPhase.success, result: result));
     } on ApiException catch (e) {
-      emit(state.copyWith(phase: RegistrationPhase.serviceabilityCheckFailed, errorMessage: e.message));
+      emit(state.copyWith(draft: draft, phase: RegistrationPhase.submitFailed, errorMessage: e.message));
     } catch (_) {
       emit(
         state.copyWith(
-          phase: RegistrationPhase.serviceabilityCheckFailed,
+          draft: draft,
+          phase: RegistrationPhase.submitFailed,
           errorMessage: 'Something went wrong. Please try again.',
         ),
       );
     }
   }
 
-  Future<void> _onSlotSelected(SlotSelected event, Emitter<RegistrationState> emit) async {
-    final draft = state.draft.copyWith(slotId: event.slotId);
-    await _persist(draft);
-    emit(state.copyWith(draft: draft, phase: RegistrationPhase.consent));
-  }
-
-  Future<void> _onConsentUpdated(ConsentUpdated event, Emitter<RegistrationState> emit) async {
-    final draft = state.draft.copyWith(
-      termsAccepted: event.termsAccepted,
-      privacyAccepted: event.privacyAccepted,
-      pushConsent: event.pushConsent,
-    );
-    await _persist(draft);
-    emit(state.copyWith(draft: draft));
-  }
-
-  Future<void> _onRegistrationSubmitted(
-    RegistrationSubmitted event,
+  /// Best-effort — Home's own calendar picker shows an empty/error state
+  /// on failure rather than this bloc surfacing a dedicated error phase,
+  /// since a slot-load failure shouldn't block anything else on Home.
+  Future<void> _onDeliverySlotsRequested(
+    DeliverySlotsRequested event,
     Emitter<RegistrationState> emit,
   ) async {
-    if (!state.draft.termsAccepted || !state.draft.privacyAccepted) return;
-    emit(state.copyWith(phase: RegistrationPhase.submitting));
     try {
-      final result = await _repository.register(state.draft);
-      await _draftStorage.clear();
-      emit(state.copyWith(phase: RegistrationPhase.success, result: result));
-    } on ApiException catch (e) {
-      emit(state.copyWith(phase: RegistrationPhase.submitFailed, errorMessage: e.message));
+      final slots = await _repository.getDeliverySlots(event.zoneId);
+      emit(state.copyWith(availableSlots: slots));
     } catch (_) {
-      emit(
-        state.copyWith(
-          phase: RegistrationPhase.submitFailed,
-          errorMessage: 'Something went wrong. Please try again.',
-        ),
-      );
+      emit(state.copyWith(availableSlots: const []));
     }
   }
 }

@@ -116,17 +116,21 @@ class AuthOtpVerifyFailure extends AuthState {
 /// Tokens themselves live only in SecureTokenStorage (never repeated
 /// here) — nothing in the UI needs the raw token value again once
 /// ApiClient's interceptor can read it from storage on each request.
-/// `accountType` is populated from GET /users/me where possible (MA-21
-/// FR-4) but is optional: a failed profile lookup after a successful
-/// login/registration must never block reaching Home, so this state can
-/// legitimately carry `accountType: null`.
+/// `accountType`/`name` are populated from GET /users/me where possible
+/// (MA-21 FR-4) but are optional: a failed profile lookup after a
+/// successful login/registration must never block reaching Home, so this
+/// state can legitimately carry both as `null` — and, on the fresh
+/// registration path specifically, `name` starts `null` because the
+/// profile doesn't exist yet at OTP-verify time (see
+/// `ProfileRefreshRequested`, dispatched once registration completes).
 class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated({this.accountType});
+  const AuthAuthenticated({this.accountType, this.name});
 
   final String? accountType;
+  final String? name;
 
   @override
-  List<Object?> get props => [accountType];
+  List<Object?> get props => [accountType, name];
 }
 
 /// MA-21 FR-1's inverse of AuthUserAlreadyExists — the standalone /login

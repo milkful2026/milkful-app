@@ -12,11 +12,11 @@ import '../bloc/registration_state.dart';
 
 /// FR-10: maps a resumed draft's settled phase to the screen that owns it.
 /// `address`/`serviceabilityCheckFailed`/`notServiceable` all resolve to
-/// `/address` since that screen already renders the right UI for each.
+/// `/address` since that screen already renders the right UI for each;
+/// `awaitingName` means serviceability is already confirmed, so Home is
+/// what shows the inline name prompt that finishes registration.
 String _routeForPhase(RegistrationPhase phase) => switch (phase) {
-      RegistrationPhase.name => '/profile',
-      RegistrationPhase.slot => '/slot',
-      RegistrationPhase.consent => '/consent',
+      RegistrationPhase.awaitingName => '/home',
       _ => '/address',
     };
 
@@ -44,11 +44,7 @@ class OtpScreen extends StatelessWidget {
         // actually needs next rather than always the blank Name screen.
         final phase = await registrationBloc.stream
             .map((s) => s.phase)
-            .firstWhere(
-              (p) =>
-                  p != RegistrationPhase.checkingServiceability &&
-                  p != RegistrationPhase.loadingSlots,
-            );
+            .firstWhere((p) => p != RegistrationPhase.checkingServiceability);
         if (!context.mounted) return;
         context.go(_routeForPhase(phase));
       },
