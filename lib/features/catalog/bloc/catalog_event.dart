@@ -9,9 +9,18 @@ sealed class CatalogEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-/// Fetches categories, then the first category's products (FR-1).
+/// Fetches categories, then either the first category's products (FR-1) or,
+/// when [showAllByDefault] is set, every product across all categories —
+/// used by the full catalog page (`/catalog`), reached via Home's "View
+/// All", which should land already showing everything rather than one
+/// arbitrary category.
 class CatalogStarted extends CatalogEvent {
-  const CatalogStarted();
+  const CatalogStarted({this.showAllByDefault = false});
+
+  final bool showAllByDefault;
+
+  @override
+  List<Object?> get props => [showAllByDefault];
 }
 
 /// FR-1: rail tap. Clears any active search/filter so the rail always shows

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../bloc/catalog_bloc.dart';
@@ -344,15 +345,23 @@ class _ProductGrid extends StatelessWidget {
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
-      itemBuilder: (context, index) => _ProductCard(product: products[index]),
+      itemBuilder: (context, index) => _ProductCard(
+        product: products[index],
+        // MA-120 FR-1: out-of-stock products stay tappable (dimmed-but-not-
+        // disabled, per MA-22's existing treatment) — the configuration
+        // screen shows its own out-of-stock state (FR-6) rather than this
+        // card blocking navigation to it.
+        onTap: () => context.push('/product/${products[index].id}', extra: products[index]),
+      ),
     );
   }
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product});
+  const _ProductCard({required this.product, required this.onTap});
 
   final Product product;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -360,21 +369,26 @@ class _ProductCard extends StatelessWidget {
     final deemphasized = product.stockState == StockState.outOfStock;
     return Opacity(
       opacity: deemphasized ? 0.6 : 1,
-      child: Container(
+      child: Material(
         key: Key('product-card-${product.id}'),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
+            child: Row(
           children: [
             Stack(
               children: [
@@ -453,6 +467,8 @@ class _ProductCard extends StatelessWidget {
             ),
             SizedBox(width: 84, child: _ProductAction(product: product)),
           ],
+        ),
+          ),
         ),
       ),
     );

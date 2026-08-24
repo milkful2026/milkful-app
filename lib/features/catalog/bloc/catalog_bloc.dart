@@ -36,8 +36,12 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
         emit(state.copyWith(status: CatalogStatus.empty, categories: categories));
         return;
       }
-      // FR-1: default selection is the first category returned.
-      emit(state.copyWith(categories: categories, selectedCategoryId: categories.first.id));
+      if (event.showAllByDefault) {
+        emit(state.copyWith(categories: categories, showingAll: true));
+      } else {
+        // FR-1: default selection is the first category returned.
+        emit(state.copyWith(categories: categories, selectedCategoryId: categories.first.id));
+      }
       await _fetch(emit);
     } catch (e) {
       emit(state.copyWith(status: CatalogStatus.error, errorMessage: _errorMessage(e)));

@@ -1,6 +1,6 @@
-import 'dart:math';
-
 import 'package:dio/dio.dart';
+
+import '../utils/id_generator.dart';
 
 /// Thrown for both a real backend error envelope
 /// (`{"requestId","status":"error","data":{"errorCode","message"}}`) and
@@ -32,11 +32,13 @@ class ApiClient {
   ApiClient({
     AccessTokenProvider? accessTokenProvider,
     Duration timeout = const Duration(seconds: 10),
-  }) : _dio = Dio(BaseOptions(connectTimeout: timeout, receiveTimeout: timeout)) {
+  }) : _dio = Dio(
+         BaseOptions(connectTimeout: timeout, receiveTimeout: timeout),
+       ) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          options.headers['X-Request-Id'] = _newRequestId();
+          options.headers['X-Request-Id'] = newHexId();
           if (accessTokenProvider != null) {
             final token = await accessTokenProvider();
             if (token != null) {
@@ -50,12 +52,6 @@ class ApiClient {
   }
 
   final Dio _dio;
-  final _random = Random.secure();
-
-  String _newRequestId() {
-    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  }
 
   /// Returns the envelope's raw, unwrapped `data` field — a `Map` for
   /// every endpoint except /delivery/slots (a bare JSON array), and `null`
@@ -65,13 +61,14 @@ class ApiClient {
     String url, {
     Map<String, dynamic>? body,
     Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
   }) async {
     try {
       final response = await _dio.request<dynamic>(
         url,
         data: body,
         queryParameters: queryParameters,
-        options: Options(method: method),
+        options: Options(method: method, headers: headers),
       );
       final envelope = response.data;
       if (envelope is Map<String, dynamic>) return envelope['data'];
@@ -83,13 +80,23 @@ class ApiClient {
 
   /// For every endpoint whose `data` is a JSON object. See [requestList]
   /// for the one endpoint (/delivery/slots) where it's a bare array.
+  /// [headers] are additive to (never replace) the interceptor's own
+  /// `X-Request-Id`/`Authorization` injection above — e.g. an
+  /// `Idempotency-Key` a specific call site needs to set.
   Future<Map<String, dynamic>> request(
     String method,
     String url, {
     Map<String, dynamic>? body,
     Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
   }) async {
-    final data = await _requestRaw(method, url, body: body, queryParameters: queryParameters);
+    final data = await _requestRaw(
+      method,
+      url,
+      body: body,
+      queryParameters: queryParameters,
+      headers: headers,
+    );
     return data is Map<String, dynamic> ? data : const {};
   }
 
@@ -98,7 +105,11 @@ class ApiClient {
     String url, {
     Map<String, dynamic>? queryParameters,
   }) async {
-    final data = await _requestRaw(method, url, queryParameters: queryParameters);
+    final data = await _requestRaw(
+      method,
+      url,
+      queryParameters: queryParameters,
+    );
     return data is List ? data : const [];
   }
 

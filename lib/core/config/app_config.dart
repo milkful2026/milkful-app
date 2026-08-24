@@ -22,6 +22,21 @@ class AppConfig {
     defaultValue: 'http://localhost:8003',
   );
 
+  /// Cart Service (MA-96) and Pricing & Offer Service (MA-101) — both
+  /// specced and reviewed, but not yet implemented (no `services/cart` or
+  /// `services/pricing-offer` directory exists). Ports are provisional
+  /// (next free slots after 8000-8003); confirm against
+  /// services/local-dev/README.md once those services are scaffolded.
+  static const cartBaseUrl = String.fromEnvironment(
+    'CART_BASE_URL',
+    defaultValue: 'http://localhost:8004',
+  );
+
+  static const pricingBaseUrl = String.fromEnvironment(
+    'PRICING_BASE_URL',
+    defaultValue: 'http://localhost:8005',
+  );
+
   /// Used by [PlacesRepository] for Places Autocomplete/Geocoding HTTP calls
   /// — separate from the native map-tile key in android/local.properties'
   /// MAPS_API_KEY (Android) / ios/Runner/ApiKeys.xcconfig (iOS). No safe

@@ -11,6 +11,9 @@ import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/profile_repository.dart';
+import 'features/cart/data/cart_repository.dart';
+import 'features/cart/data/pricing_repository.dart';
+import 'features/cart/data/wallet_balance_repository.dart';
 import 'features/catalog/data/catalog_repository.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
 import 'features/onboarding/data/places_repository.dart';
@@ -37,6 +40,18 @@ class MilkfulApp extends StatelessWidget {
     final profileRepository = DioProfileRepository(apiClient);
     final registrationRepository = DioRegistrationRepository(apiClient);
     final catalogRepository = DioCatalogRepository(apiClient);
+    // MA-96/MA-101: contracts merged and reviewed, but neither service is
+    // implemented yet (services/cart, services/pricing-offer don't exist)
+    // — these Dio implementations are correct against the merged specs and
+    // ready to integration-test once those services exist; until then,
+    // every call fails with a connection error, same as any other
+    // unreachable backend.
+    final pricingRepository = DioPricingRepository(apiClient);
+    final cartRepository = DioCartRepository(apiClient);
+    // MA-100 (Wallet Service) doesn't exist at all — not even a spec — so
+    // there's no contract to implement against yet. See
+    // wallet_balance_repository.dart's own doc comment.
+    const walletBalanceRepository = StubWalletBalanceRepository();
     // A separate, plain Dio — Google's Places/Geocoding APIs use their own
     // response envelope, not this app's backend's, so they don't go through
     // ApiClient (which would try to unwrap {requestId,status,data}) or carry
@@ -57,6 +72,10 @@ class MilkfulApp extends StatelessWidget {
         RepositoryProvider<DraftStorage>.value(value: draftStorage),
         RepositoryProvider<PlacesRepository>.value(value: placesRepository),
         RepositoryProvider<CatalogRepository>.value(value: catalogRepository),
+        RepositoryProvider<ProfileRepository>.value(value: profileRepository),
+        RepositoryProvider<PricingRepository>.value(value: pricingRepository),
+        RepositoryProvider<CartRepository>.value(value: cartRepository),
+        RepositoryProvider<WalletBalanceRepository>.value(value: walletBalanceRepository),
       ],
       child: MultiBlocProvider(
         providers: [

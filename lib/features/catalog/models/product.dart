@@ -10,10 +10,10 @@ enum StockState { inStock, outOfStock, availableFrom }
 // is hiding a purchasable product, not offering one that isn't actually
 // available.
 StockState _stockStateFromJson(String value) => switch (value) {
-      'IN_STOCK' => StockState.inStock,
-      'AVAILABLE_FROM' => StockState.availableFrom,
-      _ => StockState.outOfStock,
-    };
+  'IN_STOCK' => StockState.inStock,
+  'AVAILABLE_FROM' => StockState.availableFrom,
+  _ => StockState.outOfStock,
+};
 
 /// MA-115 §7. Shared by category-browse (`GET /products`) and search
 /// (`GET /search`) results — MA-117 FR-1 states both return the same shape,
@@ -31,6 +31,7 @@ class Product extends Equatable {
     this.tag,
     this.subscriptionEligible = false,
     this.availableFrom,
+    this.availableQuantity,
   });
 
   final String id;
@@ -45,34 +46,42 @@ class Product extends Equatable {
   final StockState stockState;
   final DateTime? availableFrom;
 
+  /// MA-120 §7. Nullable — not yet on the wire (Catalog Service hasn't
+  /// added it yet); `null` means "unknown," not "zero." Callers needing a
+  /// stepper max fall back to a fixed cap (see product_config_bloc.dart)
+  /// rather than treating `null` as no-limit or as zero.
+  final int? availableQuantity;
+
   factory Product.fromJson(Map<String, dynamic> json) => Product(
-        id: json['id'] as String,
-        categoryId: json['categoryId'] as String,
-        name: json['name'] as String,
-        description: json['description'] as String? ?? '',
-        unit: json['unit'] as String,
-        price: (json['price'] as num).toDouble(),
-        imageUrl: json['imageUrl'] as String?,
-        tag: json['tag'] as String?,
-        subscriptionEligible: json['subscriptionEligible'] as bool? ?? false,
-        stockState: _stockStateFromJson(json['stockState'] as String? ?? ''),
-        availableFrom: json['availableFrom'] == null
-            ? null
-            : DateTime.parse(json['availableFrom'] as String),
-      );
+    id: json['id'] as String,
+    categoryId: json['categoryId'] as String,
+    name: json['name'] as String,
+    description: json['description'] as String? ?? '',
+    unit: json['unit'] as String,
+    price: (json['price'] as num).toDouble(),
+    imageUrl: json['imageUrl'] as String?,
+    tag: json['tag'] as String?,
+    subscriptionEligible: json['subscriptionEligible'] as bool? ?? false,
+    stockState: _stockStateFromJson(json['stockState'] as String? ?? ''),
+    availableFrom: json['availableFrom'] == null
+        ? null
+        : DateTime.parse(json['availableFrom'] as String),
+    availableQuantity: json['availableQuantity'] as int?,
+  );
 
   @override
   List<Object?> get props => [
-        id,
-        categoryId,
-        name,
-        description,
-        unit,
-        price,
-        imageUrl,
-        tag,
-        subscriptionEligible,
-        stockState,
-        availableFrom,
-      ];
+    id,
+    categoryId,
+    name,
+    description,
+    unit,
+    price,
+    imageUrl,
+    tag,
+    subscriptionEligible,
+    stockState,
+    availableFrom,
+    availableQuantity,
+  ];
 }

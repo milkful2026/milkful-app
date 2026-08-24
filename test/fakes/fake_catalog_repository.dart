@@ -1,3 +1,4 @@
+import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/category.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
@@ -11,18 +12,22 @@ class FakeCatalogRepository implements CatalogRepository {
     this.categoriesException,
     this.productsException,
     this.searchException,
+    this.getProductException,
     this.categories = const [],
     this.productsByCategory = const {},
     this.searchResults = const [],
+    this.productsById = const {},
     this.categoryFetchDelays = const {},
   });
 
   Object? categoriesException;
   Object? productsException;
   Object? searchException;
+  Object? getProductException;
   List<Category> categories;
   Map<String, List<Product>> productsByCategory;
   List<Product> searchResults;
+  Map<String, Product> productsById;
 
   /// Per-category artificial delay before `getProducts` resolves — lets
   /// tests simulate a slower response for an earlier request racing against
@@ -33,6 +38,7 @@ class FakeCatalogRepository implements CatalogRepository {
   final List<String?> searchQueries = [];
   final List<CatalogFilters?> searchFilters = [];
   final List<CatalogSort?> searchSorts = [];
+  final List<String> requestedProductIds = [];
 
   @override
   Future<List<Category>> getCategories() async {
@@ -50,7 +56,25 @@ class FakeCatalogRepository implements CatalogRepository {
   }
 
   @override
-  Future<List<Product>> search({String? query, CatalogFilters? filters, CatalogSort? sort}) async {
+  Future<Product> getProduct(String productId) async {
+    requestedProductIds.add(productId);
+    if (getProductException != null) throw getProductException!;
+    final product = productsById[productId];
+    if (product == null) {
+      throw ApiException(
+        errorCode: 'NOT_FOUND',
+        message: 'No such product: $productId',
+      );
+    }
+    return product;
+  }
+
+  @override
+  Future<List<Product>> search({
+    String? query,
+    CatalogFilters? filters,
+    CatalogSort? sort,
+  }) async {
     searchQueries.add(query);
     searchFilters.add(filters);
     searchSorts.add(sort);

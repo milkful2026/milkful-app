@@ -7,6 +7,9 @@ import '../../features/auth/bloc/auth_bloc.dart';
 import '../../features/auth/bloc/auth_state.dart';
 import '../../features/auth/presentation/login_otp_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/cart/presentation/product_config_screen.dart';
+import '../../features/catalog/models/product.dart';
+import '../../features/catalog/presentation/catalog_page.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
@@ -69,6 +72,26 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/login/otp', builder: (context, state) => const LoginOtpScreen()),
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      // Reached from Home's landing page — "View All" on Categories, tapping
+      // a category icon, or the search bar — never a first-load destination
+      // of its own, so it's pushed (not routed to directly) rather than
+      // wired into the auth redirect guard above.
+      GoRoute(path: '/catalog', builder: (context, state) => const CatalogPage()),
+      // MA-23/MA-120 §6. The tapped `Product` is passed via `extra:` (the
+      // catalog card already holds it, avoiding a redundant fetch) — this
+      // is the first route in this app to actually consume `state.extra`
+      // (no existing builder does; see the PR #7 review's correction of
+      // the original spec's routing citation), so it's null-checked rather
+      // than assumed present: a deep link or a restored route with no
+      // `Product` attached falls back to Home instead of crashing.
+      GoRoute(
+        path: '/product/:productId',
+        builder: (context, state) {
+          final product = state.extra;
+          if (product is! Product) return const HomeScreen();
+          return ProductConfigScreen(product: product);
+        },
+      ),
     ],
   );
 }
