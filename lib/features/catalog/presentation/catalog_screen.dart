@@ -525,7 +525,10 @@ class _ProductAction extends StatelessWidget {
         );
       case StockState.inStock:
         return FilledButton(
-          onPressed: () {}, // MA-23's concern — this spec only requires Add be present/enabled.
+          // MA-23: Add opens the same product-configuration screen the
+          // card's own onTap (above) does — quantity/frequency/date are
+          // chosen there, not inline on this row.
+          onPressed: () => context.push('/product/${product.id}', extra: product),
           style: FilledButton.styleFrom(minimumSize: const Size(64, 36)),
           child: const Text('Add'),
         );

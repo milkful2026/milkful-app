@@ -790,7 +790,10 @@ class _ProductCardState extends State<_ProductCard> {
                 ),
               ),
               FilledButton(
-                onPressed: () {}, // No cart yet — presence-only, mirrors CatalogScreen's own Add button.
+                // MA-23: opens the same product-configuration screen
+                // CatalogScreen's own Add button does — see that screen's
+                // _ProductAction.
+                onPressed: () => context.push('/product/${product.id}', extra: product),
                 style: FilledButton.styleFrom(minimumSize: const Size(64, 32), padding: const EdgeInsets.symmetric(horizontal: 12)),
                 child: const Text('Add', style: TextStyle(fontSize: 13)),
               ),
