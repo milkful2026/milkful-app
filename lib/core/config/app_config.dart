@@ -22,16 +22,17 @@ class AppConfig {
     defaultValue: 'http://localhost:8003',
   );
 
-  /// Cart Service (MA-96) and Pricing & Offer Service (MA-101) — both
-  /// specced and reviewed, but not yet implemented (no `services/cart` or
-  /// `services/pricing-offer` directory exists). Ports are provisional
-  /// (next free slots after 8000-8003); confirm against
-  /// services/local-dev/README.md once those services are scaffolded.
+  /// Cart Service (MA-96, `services/cart`) — real, DynamoDB-backed.
   static const cartBaseUrl = String.fromEnvironment(
     'CART_BASE_URL',
     defaultValue: 'http://localhost:8004',
   );
 
+  /// Pricing Service (MA-101, `services/pricing-offer`) — a deliberately
+  /// scoped-down build of the full merged MA-122 spec (no Offers, no
+  /// per-product HSN/GST tax rate, no Redis — see that service's own
+  /// README "Scope" section), enough to make `POST /pricing/quote` real
+  /// for MA-23's mobile screen, its only caller today.
   static const pricingBaseUrl = String.fromEnvironment(
     'PRICING_BASE_URL',
     defaultValue: 'http://localhost:8005',

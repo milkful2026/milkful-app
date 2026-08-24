@@ -40,12 +40,9 @@ class MilkfulApp extends StatelessWidget {
     final profileRepository = DioProfileRepository(apiClient);
     final registrationRepository = DioRegistrationRepository(apiClient);
     final catalogRepository = DioCatalogRepository(apiClient);
-    // MA-96/MA-101: contracts merged and reviewed, but neither service is
-    // implemented yet (services/cart, services/pricing-offer don't exist)
-    // — these Dio implementations are correct against the merged specs and
-    // ready to integration-test once those services exist; until then,
-    // every call fails with a connection error, same as any other
-    // unreachable backend.
+    // MA-96 (Cart, DynamoDB-backed) and MA-101 (Pricing, scoped-down —
+    // see that service's own README) both now exist as real, runnable
+    // services at services/cart and services/pricing-offer.
     final pricingRepository = DioPricingRepository(apiClient);
     final cartRepository = DioCartRepository(apiClient);
     // MA-100 (Wallet Service) doesn't exist at all — not even a spec — so
