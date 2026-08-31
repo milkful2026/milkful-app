@@ -43,6 +43,13 @@ class FakeCartRepository implements CartRepository {
   Object? updateItemException;
   Object? removeItemException;
 
+  /// Number of remaining `updateItem` calls that should throw
+  /// [updateItemException], decremented on each call — `-1` (the default,
+  /// whenever [updateItemException] is set) means "always throw." Set to a
+  /// small positive number to simulate "fails N times (e.g. a 409), then
+  /// succeeds on retry" without relying on real timing.
+  int updateItemFailuresRemaining = -1;
+
   final List<FakeAddItemRequest> requests = [];
   final List<FakeUpdateItemRequest> updateItemRequests = [];
   final List<String> removeItemRequests = [];
@@ -81,7 +88,10 @@ class FakeCartRepository implements CartRepository {
     required int ifVersion,
   }) async {
     updateItemRequests.add(FakeUpdateItemRequest(items: items, ifVersion: ifVersion));
-    if (updateItemException != null) throw updateItemException!;
+    if (updateItemException != null && updateItemFailuresRemaining != 0) {
+      if (updateItemFailuresRemaining > 0) updateItemFailuresRemaining--;
+      throw updateItemException!;
+    }
     return updateItemResult ?? CartView(items: items, cartVersion: ifVersion + 1);
   }
 
