@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
 import 'package:milkful_app/features/auth/bloc/auth_event.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
@@ -103,5 +104,48 @@ void main() {
 
     expect(authRepository.loggedOutWith, ['stored-refresh']);
     expect(tokenStorage.accessToken, isNull);
+  });
+
+  testWidgets('Tapping the cart FAB navigates to /cart', (tester) async {
+    authRepository = FakeAuthRepository();
+    tokenStorage = FakeSecureTokenStorage()
+      ..accessToken = 'stored-access'
+      ..refreshToken = 'stored-refresh';
+    authBloc = AuthBloc(
+      authRepository: authRepository,
+      tokenStorage: tokenStorage,
+      profileRepository: FakeProfileRepository(),
+    );
+    addTearDown(() => authBloc.close());
+
+    final router = GoRouter(
+      initialLocation: '/home',
+      routes: [
+        GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+        GoRoute(path: '/cart', builder: (context, state) => const Placeholder()),
+      ],
+    );
+
+    await tester.pumpWidget(
+      RepositoryProvider<CatalogRepository>.value(
+        value: FakeCatalogRepository(),
+        child: BlocProvider<AuthBloc>.value(
+          value: authBloc,
+          child: BlocProvider<RegistrationBloc>(
+            create: (_) => RegistrationBloc(
+              repository: FakeRegistrationRepository(),
+              draftStorage: FakeDraftStorage(),
+            ),
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('cart-fab')));
+    await tester.pumpAndSettle();
+
+    expect(router.state.uri.path, '/cart');
   });
 }

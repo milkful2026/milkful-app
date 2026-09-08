@@ -16,6 +16,8 @@ import 'package:milkful_app/features/auth/models/user_profile.dart';
 import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/cart/data/pricing_repository.dart';
 import 'package:milkful_app/features/cart/data/wallet_balance_repository.dart';
+import 'package:milkful_app/features/cart/models/cart_line_item.dart';
+import 'package:milkful_app/features/cart/models/cart_view.dart';
 import 'package:milkful_app/features/cart/models/frequency.dart';
 import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/cart/presentation/product_config_screen.dart';
@@ -70,6 +72,18 @@ class _FakeCartRepository implements CartRepository {
     required String idempotencyKey,
     DateTime? startDate,
   }) async {}
+
+  @override
+  Future<CartView> getCart() async => const CartView(items: [], cartVersion: 0);
+
+  @override
+  Future<CartView> updateItem({
+    required List<CartLineItem> items,
+    required int ifVersion,
+  }) async => CartView(items: items, cartVersion: ifVersion + 1);
+
+  @override
+  Future<void> removeItem({required String id}) async {}
 }
 
 class _FakeWalletBalanceRepository implements WalletBalanceRepository {

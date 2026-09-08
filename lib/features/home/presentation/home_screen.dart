@@ -164,12 +164,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           bottomNavigationBar: const _HomeBottomNav(),
-          floatingActionButton: const FloatingActionButton(
-            key: Key('cart-fab'),
-            // No cart feature/backend yet — present per mockup, not wired,
-            // same treatment as the bottom nav's own non-Home items.
-            onPressed: null,
-            child: Icon(Icons.shopping_basket_outlined),
+          floatingActionButton: FloatingActionButton(
+            key: const Key('cart-fab'),
+            onPressed: () => context.push('/cart'),
+            child: const Icon(Icons.shopping_basket_outlined),
           ),
         ),
       ),

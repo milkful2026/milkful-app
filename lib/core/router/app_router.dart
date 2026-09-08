@@ -7,6 +7,7 @@ import '../../features/auth/bloc/auth_bloc.dart';
 import '../../features/auth/bloc/auth_state.dart';
 import '../../features/auth/presentation/login_otp_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/cart/presentation/cart_screen.dart';
 import '../../features/cart/presentation/product_config_screen.dart';
 import '../../features/catalog/models/product.dart';
 import '../../features/catalog/presentation/catalog_page.dart';
@@ -77,6 +78,10 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       // of its own, so it's pushed (not routed to directly) rather than
       // wired into the auth redirect guard above.
       GoRoute(path: '/catalog', builder: (context, state) => const CatalogPage()),
+      // MA-123. Reached from Home's cart FAB — no `extra:` payload, since
+      // the screen always fetches its own state fresh from Cart Service
+      // rather than trusting anything passed in.
+      GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
       // MA-23/MA-120 §6. The tapped `Product` is passed via `extra:` (the
       // catalog card already holds it, avoiding a redundant fetch) — this
       // is the first route in this app to actually consume `state.extra`
