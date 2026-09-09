@@ -54,6 +54,7 @@ class CartState extends Equatable {
   CartState copyWith({
     CartLoadStatus? loadStatus,
     String? loadErrorMessage,
+    bool clearLoadErrorMessage = false,
     List<CartLineItemView>? items,
     int? cartVersion,
     Quote? quote,
@@ -64,7 +65,7 @@ class CartState extends Equatable {
     bool clearWriteErrorMessage = false,
   }) => CartState(
     loadStatus: loadStatus ?? this.loadStatus,
-    loadErrorMessage: loadErrorMessage,
+    loadErrorMessage: clearLoadErrorMessage ? null : (loadErrorMessage ?? this.loadErrorMessage),
     items: items ?? this.items,
     cartVersion: cartVersion ?? this.cartVersion,
     quote: clearQuote ? null : (quote ?? this.quote),

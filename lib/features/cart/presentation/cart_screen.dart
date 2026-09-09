@@ -41,6 +41,7 @@ class _CartViewState extends State<_CartView> {
   // field.
   final Map<String, int> _localQuantities = {};
   final Map<String, Timer> _debounceTimers = {};
+  bool _removalDialogOpen = false;
 
   @override
   void dispose() {
@@ -53,40 +54,62 @@ class _CartViewState extends State<_CartView> {
   int _quantityFor(CartLineItemView view) => _localQuantities[view.lineItem.id] ?? view.lineItem.quantity;
 
   void _changeQuantity(BuildContext context, CartLineItemView view, int delta) {
+    final lineItemId = view.lineItem.id;
     final next = (_quantityFor(view) + delta).clamp(1, 99);
     if (next == _quantityFor(view)) return;
-    setState(() => _localQuantities[view.lineItem.id] = next);
-    _debounceTimers[view.lineItem.id]?.cancel();
-    _debounceTimers[view.lineItem.id] = Timer(const Duration(milliseconds: 500), () {
-      context.read<CartBloc>().add(
-        QuantityWriteRequested(lineItemId: view.lineItem.id, quantity: next),
-      );
+    // Resolve the bloc now, not inside the delayed closure — by the time
+    // the timer fires this row's element may have been scrolled off and
+    // deactivated, making its `context` unsafe to look up a provider from.
+    final bloc = context.read<CartBloc>();
+    setState(() => _localQuantities[lineItemId] = next);
+    _debounceTimers[lineItemId]?.cancel();
+    _debounceTimers[lineItemId] = Timer(const Duration(milliseconds: 500), () {
+      _debounceTimers.remove(lineItemId);
+      bloc.add(QuantityWriteRequested(lineItemId: lineItemId, quantity: next));
     });
   }
 
+  /// Drops the instant-feedback override for any row whose debounced write
+  /// has already been dispatched, so the row falls back to bloc state as
+  /// the source of truth. Without this, a write that fails (and reverts in
+  /// the bloc) or that the server adjusts would leave the stepper stuck on
+  /// the user's last-typed number, diverging from the real cart.
+  void _reconcileLocalQuantities() {
+    final settled = _localQuantities.keys
+        .where((id) => !_debounceTimers.containsKey(id))
+        .toList();
+    if (settled.isEmpty) return;
+    setState(() => settled.forEach(_localQuantities.remove));
+  }
+
   Future<void> _confirmRemoval(BuildContext context, String lineItemId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove item'),
-        content: const Text('Remove this item from your cart?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (!context.mounted) return;
-    if (confirmed ?? false) {
-      context.read<CartBloc>().add(ItemRemoveConfirmed(lineItemId: lineItemId));
-    } else {
-      context.read<CartBloc>().add(const ItemRemoveCancelled());
+    _removalDialogOpen = true;
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Remove item'),
+          content: const Text('Remove this item from your cart?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted) return;
+      if (confirmed ?? false) {
+        context.read<CartBloc>().add(ItemRemoveConfirmed(lineItemId: lineItemId));
+      } else {
+        context.read<CartBloc>().add(const ItemRemoveCancelled());
+      }
+    } finally {
+      _removalDialogOpen = false;
     }
   }
 
@@ -97,9 +120,11 @@ class _CartViewState extends State<_CartView> {
       body: BlocConsumer<CartBloc, CartState>(
         listenWhen: (previous, current) =>
             previous.pendingRemovalId != current.pendingRemovalId ||
-            previous.writeErrorMessage != current.writeErrorMessage,
+            previous.writeErrorMessage != current.writeErrorMessage ||
+            previous.items != current.items,
         listener: (context, state) {
-          if (state.pendingRemovalId != null) {
+          _reconcileLocalQuantities();
+          if (state.pendingRemovalId != null && !_removalDialogOpen) {
             _confirmRemoval(context, state.pendingRemovalId!);
           }
           if (state.writeErrorMessage != null) {
@@ -110,7 +135,7 @@ class _CartViewState extends State<_CartView> {
         },
         builder: (context, state) {
           if (state.loadStatus == CartLoadStatus.loading) {
-            return const Center(child: CircularProgressIndicator());
+            return const _CartLoadingSkeleton();
           }
           if (state.loadStatus == CartLoadStatus.failed) {
             return Center(
@@ -154,6 +179,29 @@ class _CartViewState extends State<_CartView> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// List-shaped placeholder rows while `getCart` + per-item `getProduct`
+/// are in flight (MA-123 FR-2), matching `catalog_screen.dart`'s
+/// `_LoadingSkeleton` treatment.
+class _CartLoadingSkeleton extends StatelessWidget {
+  const _CartLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (context, index) => Container(
+        height: 88,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(16),
+        ),
       ),
     );
   }
@@ -309,8 +357,10 @@ class _CartSummaryBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12)],
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(color: theme.shadowColor.withValues(alpha: 0.08), blurRadius: 12),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -320,7 +370,7 @@ class _CartSummaryBar extends StatelessWidget {
           children: [
             if (quote != null) ...[
               _SummaryRow('Subtotal', quote.basePrice),
-              _SummaryRow('Tax (${quote.taxRate}%)', quote.taxAmount),
+              _SummaryRow('Tax (${_formatRate(quote.taxRate)}%)', quote.taxAmount),
               _SummaryRow('Delivery Fee', quote.deliveryFee),
               if (quote.discountAmount != null) _SummaryRow('Discount', -quote.discountAmount!),
               _SummaryRow('Total', quote.netPayable, emphasize: true),
@@ -342,6 +392,11 @@ class _CartSummaryBar extends StatelessWidget {
     );
   }
 }
+
+/// `taxRate` is always a `double`; render integral rates as "5%", not
+/// "5.0%", while keeping real fractions ("12.5%").
+String _formatRate(double rate) =>
+    rate == rate.roundToDouble() ? rate.toStringAsFixed(0) : rate.toString();
 
 class _SummaryRow extends StatelessWidget {
   const _SummaryRow(this.label, this.amount, {this.emphasize = false});

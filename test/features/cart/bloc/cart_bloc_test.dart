@@ -214,6 +214,56 @@ void main() {
     );
 
     blocTest<CartBloc, CartState>(
+      'back-to-back writes on different rows both reach the server (neither is cancelled)',
+      build: build,
+      act: (bloc) async {
+        bloc.add(const CartStarted());
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        bloc.add(const QuantityWriteRequested(lineItemId: 'li-1', quantity: 2));
+        bloc.add(const QuantityWriteRequested(lineItemId: 'li-2', quantity: 4));
+      },
+      wait: const Duration(milliseconds: 40),
+      verify: (bloc) {
+        expect(cartRepository.updateItemRequests, hasLength(2));
+        expect(bloc.state.writeErrorMessage, isNull);
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'a 409 that persists through the retry reverts items and cartVersion together',
+      build: () {
+        cartRepository = FakeCartRepository(
+          getCartResult: const CartView(
+            items: [_lineItem1, _lineItem2],
+            cartVersion: 1,
+            quote: _quote,
+          ),
+          updateItemException: const ApiException(
+            errorCode: 'CART_VERSION_CONFLICT',
+            message: 'stale version',
+            statusCode: 409,
+          ),
+        );
+        return CartBloc(cartRepository: cartRepository, catalogRepository: catalogRepository);
+      },
+      act: (bloc) async {
+        bloc.add(const CartStarted());
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        bloc.add(const QuantityWriteRequested(lineItemId: 'li-1', quantity: 9));
+      },
+      wait: const Duration(milliseconds: 40),
+      verify: (bloc) {
+        expect(bloc.state.writeErrorMessage, 'stale version');
+        // Reverted to the refetched server snapshot (quantity 1), and
+        // cartVersion still describes that same snapshot rather than being
+        // left advanced past the items it no longer matches.
+        expect(bloc.state.items.firstWhere((v) => v.lineItem.id == 'li-1').lineItem.quantity, 1);
+        expect(bloc.state.cartVersion, 1);
+        expect(cartRepository.updateItemRequests, hasLength(2)); // initial + one retry
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
       'a non-conflict write failure reverts the optimistic change and surfaces the message',
       build: () {
         cartRepository.updateItemException = const ApiException(
