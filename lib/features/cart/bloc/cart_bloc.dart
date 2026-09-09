@@ -10,23 +10,29 @@ import 'cart_event.dart';
 import 'cart_state.dart';
 
 /// MA-123's `CartBloc`. Mirrors `ProductConfigBloc`'s shape — one bloc
-/// owning a single screen's several independent async operations — and
-/// reuses `CatalogBloc`'s `restartable()` convention for write races.
+/// owning a single screen's several independent async operations.
 class CartBloc extends Bloc<CartEvent, CartState> {
   CartBloc({required this._cartRepository, required this._catalogRepository})
     : super(const CartState()) {
     on<CartStarted>(_onStarted);
-    on<QuantityWriteRequested>(_onQuantityWriteRequested, transformer: restartable());
+    // `sequential`, not `restartable`: each write is a full round-trip that
+    // depends on and advances `cartVersion`, and `PUT /cart` replaces the
+    // whole item list. `restartable` cancels an in-flight write when the
+    // next one arrives — which, keyed on event type rather than line item,
+    // means editing one row would abort another row's write mid-flight and
+    // run its revert/error handling on a dead `Emitter` (a silent no-op).
+    // Serializing keeps every write's outcome observable.
+    on<QuantityWriteRequested>(_onQuantityWriteRequested, transformer: sequential());
     on<ItemRemoveRequested>(_onItemRemoveRequested);
     on<ItemRemoveCancelled>(_onItemRemoveCancelled);
-    on<ItemRemoveConfirmed>(_onItemRemoveConfirmed, transformer: restartable());
+    on<ItemRemoveConfirmed>(_onItemRemoveConfirmed, transformer: sequential());
   }
 
   final CartRepository _cartRepository;
   final CatalogRepository _catalogRepository;
 
   Future<void> _onStarted(CartStarted event, Emitter<CartState> emit) async {
-    emit(state.copyWith(loadStatus: CartLoadStatus.loading));
+    emit(state.copyWith(loadStatus: CartLoadStatus.loading, clearLoadErrorMessage: true));
     try {
       final view = await _cartRepository.getCart();
       final items = await _resolveProducts(view.items);
@@ -94,7 +100,8 @@ class CartBloc extends Bloc<CartEvent, CartState> {
       lineItemId: event.lineItemId,
       quantity: event.quantity,
       items: optimisticItems,
-      originalItems: originalItems,
+      revertItems: originalItems,
+      revertVersion: state.cartVersion,
       emit: emit,
       retried: false,
     );
@@ -102,12 +109,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
 
   /// MA-123 FR-6 — a stale `cartVersion` (409) silently refetches and
   /// re-applies the same target quantity once; any other failure reverts
-  /// the optimistic change and surfaces the backend's message.
+  /// to the last known-good state and surfaces the backend's message.
+  ///
+  /// [revertItems]/[revertVersion] are always a matched pair describing one
+  /// consistent cart snapshot — after a 409 refetch that pair becomes the
+  /// freshly-fetched server state, not the pre-edit local snapshot, so a
+  /// failed retry can't leave `items` and `cartVersion` describing
+  /// different carts (which would let the next write submit a stale list
+  /// under a valid `ifVersion` and silently clobber a concurrent change).
   Future<void> _writeQuantity({
     required String lineItemId,
     required int quantity,
     required List<CartLineItemView> items,
-    required List<CartLineItemView> originalItems,
+    required List<CartLineItemView> revertItems,
+    required int revertVersion,
     required Emitter<CartState> emit,
     required bool retried,
   }) async {
@@ -128,7 +143,8 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     } on ApiException catch (e) {
       if (e.statusCode == 409 && !retried) {
         final fresh = await _cartRepository.getCart();
-        final refreshedItems = _pairWithKnownProducts(fresh.items)
+        final freshViews = _pairWithKnownProducts(fresh.items);
+        final refreshedItems = freshViews
             .map(
               (v) => v.lineItem.id == lineItemId
                   ? v.copyWith(lineItem: v.lineItem.copyWith(quantity: quantity))
@@ -140,15 +156,28 @@ class CartBloc extends Bloc<CartEvent, CartState> {
           lineItemId: lineItemId,
           quantity: quantity,
           items: refreshedItems,
-          originalItems: originalItems,
+          revertItems: freshViews,
+          revertVersion: fresh.cartVersion,
           emit: emit,
           retried: true,
         );
         return;
       }
-      emit(state.copyWith(items: originalItems, writeErrorMessage: e.message));
+      emit(
+        state.copyWith(
+          items: revertItems,
+          cartVersion: revertVersion,
+          writeErrorMessage: e.message,
+        ),
+      );
     } catch (_) {
-      emit(state.copyWith(items: originalItems, writeErrorMessage: 'Something went wrong'));
+      emit(
+        state.copyWith(
+          items: revertItems,
+          cartVersion: revertVersion,
+          writeErrorMessage: 'Something went wrong',
+        ),
+      );
     }
   }
 

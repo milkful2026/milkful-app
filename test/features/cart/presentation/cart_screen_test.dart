@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/cart/models/cart_line_item.dart';
 import 'package:milkful_app/features/cart/models/cart_view.dart';
@@ -122,6 +123,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('cart-empty-state')), findsOneWidget);
+  });
+
+  testWidgets('a failed quantity write snaps the stepper back to the real quantity', (tester) async {
+    cartRepository = FakeCartRepository(
+      getCartResult: const CartView(items: [_lineItem], cartVersion: 1, quote: _quote),
+      updateItemException: const ApiException(
+        errorCode: 'STOCK_EXCEEDED',
+        message: 'Only 1 left in stock',
+      ),
+    );
+
+    await pumpCart(tester);
+
+    await tester.tap(find.byKey(const Key('cart-item-quantity-increase-li-1')));
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cart-item-quantity-value-li-1'))).data,
+      '2',
+    );
+
+    // Debounce fires -> write -> fails -> bloc reverts -> the local
+    // instant-feedback override must not keep the row stuck on 2.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cart-item-quantity-value-li-1'))).data,
+      '1',
+    );
   });
 
   testWidgets('Cancelling the remove dialog keeps the item', (tester) async {
