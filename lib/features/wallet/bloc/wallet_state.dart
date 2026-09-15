@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../models/payment_method.dart';
 import '../models/pending_recharge.dart';
 import '../models/recharge_order.dart';
+import '../models/wallet_status.dart';
 import '../models/wallet_view.dart';
 
 enum WalletLoadStatus { idle, loading, loaded, failed }
@@ -94,7 +95,7 @@ class WalletState extends Equatable {
   bool get canStartRecharge =>
       walletLoadStatus == WalletLoadStatus.loaded &&
       wallet != null &&
-      wallet!.status.name == 'active' &&
+      wallet!.status == WalletStatus.active &&
       !isRechargeInFlight &&
       pendingRecharge == null &&
       selectedAmountPaise != null &&

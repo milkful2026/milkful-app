@@ -71,10 +71,21 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
     final lastMethodWire = await _paymentMethodStore.read();
     final pending = await _pendingRechargeStore.read();
 
+    PaymentMethod? lastMethod;
+    if (lastMethodWire != null) {
+      try {
+        lastMethod = PaymentMethod.fromWire(lastMethodWire);
+      } catch (_) {
+        // A stale/malformed stored value must never crash the Wallet
+        // screen — treat it as absent, same as PendingRechargeStore's own
+        // self-healing on a malformed record.
+      }
+    }
+
     emit(
       state.copyWith(
         walletLoadStatus: WalletLoadStatus.loading,
-        selectedMethod: lastMethodWire != null ? PaymentMethod.fromWire(lastMethodWire) : null,
+        selectedMethod: lastMethod,
         idempotencyKey: pending?.idempotencyKey,
         pendingRecharge: pending,
         rechargeStatus: pending != null ? RechargeStatus.pending : state.rechargeStatus,
@@ -194,7 +205,7 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
         ),
       );
 
-      unawaited(_launchGateway(order.razorpayOrderId, amountPaise, method));
+      unawaited(_launchGateway(order.razorpayKeyId, order.razorpayOrderId, amountPaise, method));
     } on ApiException catch (e) {
       // Pre-confirm failure — idempotencyKey is deliberately left set so
       // a Retry (FR-8) reuses it rather than minting a second one.
@@ -206,10 +217,31 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
     }
   }
 
-  Future<void> _launchGateway(String razorpayOrderId, int amountPaise, PaymentMethod method) async {
-    final result = await _razorpayCheckout.open(
-      RazorpayOptions(razorpayOrderId: razorpayOrderId, amountPaise: amountPaise, method: method),
-    );
+  Future<void> _launchGateway(
+    String razorpayKeyId,
+    String razorpayOrderId,
+    int amountPaise,
+    PaymentMethod method,
+  ) async {
+    final RazorpayResult result;
+    try {
+      result = await _razorpayCheckout.open(
+        RazorpayOptions(
+          razorpayKeyId: razorpayKeyId,
+          razorpayOrderId: razorpayOrderId,
+          amountPaise: amountPaise,
+          method: method,
+        ),
+      );
+    } catch (e) {
+      // The gateway sheet never opened at all (e.g. RazorpayNotConfiguredError
+      // when the key is empty) — without this, the exception would go
+      // unhandled (this is invoked via unawaited()) and the bloc would stay
+      // stuck at RechargeStatus.awaitingGateway forever.
+      if (isClosed) return;
+      add(RechargeGatewayFailed(code: 'GATEWAY_LAUNCH_ERROR', description: e.toString()));
+      return;
+    }
     if (isClosed) return;
     switch (result) {
       case RazorpaySuccess(:final razorpayPaymentId, :final razorpayOrderId, :final razorpaySignature):
@@ -301,14 +333,39 @@ class WalletBloc extends Bloc<WalletEvent, WalletState> {
     if (pending == null || isClosed) return;
 
     PaymentView? payment;
+    ApiException? terminalError;
     try {
       payment = await _walletRepository.getPayment(pending.paymentId);
+    } on ApiException catch (e) {
+      // A 4xx (e.g. NOT_FOUND, FORBIDDEN) means retrying this same call
+      // will never succeed — surface it instead of polling forever.
+      // Anything else (network failure, 5xx) is treated as a transient
+      // hiccup and falls through to the still-pending branch below.
+      final status = e.statusCode;
+      if (status != null && status >= 400 && status < 500) {
+        terminalError = e;
+      }
     } catch (_) {
       // Transient network hiccup — fall through to the still-pending
       // branch below rather than reporting a failure that isn't one.
     }
 
     if (isClosed || state.pendingRecharge != pending) return;
+
+    if (terminalError != null) {
+      await _pendingRechargeStore.clear();
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          rechargeStatus: RechargeStatus.failed,
+          rechargeErrorMessage: terminalError.message,
+          clearActiveOrder: true,
+          clearPendingRecharge: true,
+          clearIdempotencyKey: true,
+        ),
+      );
+      return;
+    }
 
     switch (payment?.status) {
       case PaymentStatus.confirmed:

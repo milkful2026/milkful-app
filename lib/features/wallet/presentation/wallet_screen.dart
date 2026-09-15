@@ -237,6 +237,8 @@ class _WalletBody extends StatelessWidget {
               _QuickTopUp(
                 selectedAmountPaise: state.selectedAmountPaise,
                 enabled: wallet.status == WalletStatus.active && controlsEnabled,
+                minPaise: wallet.rechargeMinPaise,
+                maxPaise: wallet.rechargeMaxPaise,
                 onSelect: (amount) => context.read<WalletBloc>().add(QuickAmountSelected(amount)),
               ),
               const SizedBox(height: 20),
@@ -495,16 +497,30 @@ class _ErrorCard extends StatelessWidget {
 }
 
 class _QuickTopUp extends StatelessWidget {
-  const _QuickTopUp({required this.selectedAmountPaise, required this.enabled, required this.onSelect});
+  const _QuickTopUp({
+    required this.selectedAmountPaise,
+    required this.enabled,
+    required this.minPaise,
+    required this.maxPaise,
+    required this.onSelect,
+  });
 
   final int? selectedAmountPaise;
   final bool enabled;
+  final int minPaise;
+  final int maxPaise;
   final ValueChanged<int> onSelect;
 
   static const _amounts = [50000, 100000, 200000];
 
   @override
   Widget build(BuildContext context) {
+    // MA-125 §6: the recharge bounds are server-configured, not hard-coded
+    // (see wallet_repository.dart) — a chip outside the wallet's current
+    // [minPaise, maxPaise] must not render, or tapping it would silently
+    // leave the Proceed button disabled with no explanation.
+    final amounts = _amounts.where((amount) => amount >= minPaise && amount <= maxPaise).toList();
+    if (amounts.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -512,10 +528,10 @@ class _QuickTopUp extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            for (final amount in _amounts)
+            for (final amount in amounts)
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(right: amount == _amounts.last ? 0 : 8),
+                  padding: EdgeInsets.only(right: amount == amounts.last ? 0 : 8),
                   child: _QuickAmountChip(
                     amountPaise: amount,
                     selected: selectedAmountPaise == amount,

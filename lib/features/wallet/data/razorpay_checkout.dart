@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
-import '../../../core/config/app_config.dart';
 import '../models/payment_method.dart';
 
 /// What [RazorpayCheckout.open] needs to launch the sheet for one
 /// recharge attempt (MA-125 FR-6).
 class RazorpayOptions {
   const RazorpayOptions({
+    required this.razorpayKeyId,
     required this.razorpayOrderId,
     required this.amountPaise,
     required this.method,
@@ -16,6 +16,7 @@ class RazorpayOptions {
     this.email,
   });
 
+  final String razorpayKeyId;
   final String razorpayOrderId;
   final int amountPaise;
   final PaymentMethod method;
@@ -63,8 +64,8 @@ abstract class RazorpayCheckout {
   void dispose();
 }
 
-/// Thrown by [RealRazorpayCheckout.open] when [AppConfig.razorpayKeyId] is
-/// empty — prevents a confusing native SDK error surfacing instead
+/// Thrown by [RealRazorpayCheckout.open] when [RazorpayOptions.razorpayKeyId]
+/// is empty — prevents a confusing native SDK error surfacing instead
 /// (MA-125 §9).
 class RazorpayNotConfiguredError extends StateError {
   RazorpayNotConfiguredError() : super('Payments aren\'t configured in this build');
@@ -77,7 +78,7 @@ class RealRazorpayCheckout implements RazorpayCheckout {
 
   @override
   Future<RazorpayResult> open(RazorpayOptions options) {
-    if (AppConfig.razorpayKeyId.isEmpty) {
+    if (options.razorpayKeyId.isEmpty) {
       throw RazorpayNotConfiguredError();
     }
     final completer = Completer<RazorpayResult>();
@@ -120,7 +121,7 @@ class RealRazorpayCheckout implements RazorpayCheckout {
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, onExternalWallet);
 
     _razorpay.open({
-      'key': AppConfig.razorpayKeyId,
+      'key': options.razorpayKeyId,
       'amount': options.amountPaise,
       'currency': 'INR',
       'name': 'Milkful',

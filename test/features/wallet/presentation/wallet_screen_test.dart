@@ -192,6 +192,30 @@ void main() {
     expect(proceedButton.onPressed, isNull);
   });
 
+  testWidgets(
+    'Quick Top Up chips outside the wallet\'s current recharge bounds are not shown',
+    (tester) async {
+      // Excludes ₹500 (below min) and ₹2000 (above max) — only ₹1000 is
+      // within bounds; a hidden/disabled-without-explanation chip must
+      // never be tappable (MA-125 §6, rechargeMinPaise/rechargeMaxPaise
+      // are server-configured, not hard-coded).
+      walletRepository.getWalletResult = const WalletView(
+        walletId: 'wallet-1',
+        status: WalletStatus.active,
+        balancePaise: 45000,
+        currency: 'INR',
+        rechargeMinPaise: 60000,
+        rechargeMaxPaise: 150000,
+      );
+
+      await pumpWallet(tester);
+
+      expect(find.byKey(const Key('wallet-quick-topup-500')), findsNothing);
+      expect(find.byKey(const Key('wallet-quick-topup-1000')), findsOneWidget);
+      expect(find.byKey(const Key('wallet-quick-topup-2000')), findsNothing);
+    },
+  );
+
   testWidgets('A load failure shows the retry state, never a fake ₹0', (tester) async {
     walletRepository.getWalletResult = null;
     walletRepository.getWalletException = const ApiException(

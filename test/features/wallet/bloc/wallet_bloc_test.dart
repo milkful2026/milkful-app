@@ -474,6 +474,108 @@ void main() {
     );
 
     blocTest<WalletBloc, WalletState>(
+      'a stale/malformed stored payment method is ignored rather than crashing WalletStarted',
+      setUp: () => paymentMethodStore.value = 'BOGUS',
+      build: build,
+      act: (bloc) => bloc.add(const WalletStarted()),
+      expect: () => [
+        predicate<WalletState>((s) => s.walletLoadStatus == WalletLoadStatus.loading),
+        predicate<WalletState>((s) => s.walletLoadStatus == WalletLoadStatus.loaded),
+      ],
+    );
+
+    blocTest<WalletBloc, WalletState>(
+      'the gateway sheet failing to launch is surfaced as a failure, not left stuck awaiting the gateway',
+      setUp: () {
+        walletRepository.createRechargeResult = _order;
+        razorpayCheckout.exception = StateError("Payments aren't configured in this build");
+      },
+      seed: () => WalletState(
+        wallet: _wallet,
+        walletLoadStatus: WalletLoadStatus.loaded,
+        selectedAmountPaise: 50000,
+        selectedMethod: PaymentMethod.card,
+      ),
+      build: build,
+      act: (bloc) => bloc.add(const RechargeRequested()),
+      wait: const Duration(milliseconds: 20),
+      verify: (bloc) {
+        expect(bloc.state.rechargeStatus, RechargeStatus.failed);
+        expect(bloc.state.pendingRecharge, isNull);
+      },
+    );
+
+    blocTest<WalletBloc, WalletState>(
+      'the order-issued razorpayKeyId is passed through to the gateway, not a static config value',
+      setUp: () => walletRepository.createRechargeResult = _order,
+      seed: () => WalletState(
+        wallet: _wallet,
+        walletLoadStatus: WalletLoadStatus.loaded,
+        selectedAmountPaise: 50000,
+        selectedMethod: PaymentMethod.card,
+      ),
+      build: build,
+      act: (bloc) => bloc.add(const RechargeRequested()),
+      wait: const Duration(milliseconds: 20),
+      verify: (_) {
+        expect(razorpayCheckout.lastOptions?.razorpayKeyId, _order.razorpayKeyId);
+      },
+    );
+
+    blocTest<WalletBloc, WalletState>(
+      'a terminal (4xx) error while polling surfaces as a failure instead of retrying forever',
+      setUp: () {
+        pendingRechargeStore.value = PendingRecharge(
+          idempotencyKey: 'idem-1',
+          paymentId: 'pay-1',
+          amountPaise: 50000,
+          method: PaymentMethod.upi,
+          createdAtIso: DateTime.now().toIso8601String(),
+        );
+        walletRepository.getPaymentException = const ApiException(
+          errorCode: 'NOT_FOUND',
+          message: 'Payment not found',
+          statusCode: 404,
+        );
+      },
+      build: build,
+      act: (bloc) => bloc.add(const WalletStarted()),
+      wait: const Duration(milliseconds: 20),
+      verify: (bloc) {
+        expect(bloc.state.rechargeStatus, RechargeStatus.failed);
+        expect(bloc.state.rechargeErrorMessage, 'Payment not found');
+        expect(bloc.state.pendingRecharge, isNull);
+        // Terminal per statusCode — must not keep retrying.
+        expect(walletRepository.getPaymentCallCount, 1);
+        expect(pendingRechargeStore.clearCallCount, 1);
+      },
+    );
+
+    blocTest<WalletBloc, WalletState>(
+      'a transient (network) error while polling keeps retrying rather than failing outright',
+      setUp: () {
+        pendingRechargeStore.value = PendingRecharge(
+          idempotencyKey: 'idem-1',
+          paymentId: 'pay-1',
+          amountPaise: 50000,
+          method: PaymentMethod.upi,
+          createdAtIso: DateTime.now().toIso8601String(),
+        );
+        walletRepository.getPaymentException = const ApiException(
+          errorCode: 'NETWORK_ERROR',
+          message: 'Could not reach the server',
+        );
+      },
+      build: build,
+      act: (bloc) => bloc.add(const WalletStarted()),
+      wait: const Duration(milliseconds: 20),
+      verify: (bloc) {
+        expect(bloc.state.rechargeStatus, RechargeStatus.pending);
+        expect(walletRepository.getPaymentCallCount, greaterThan(1));
+      },
+    );
+
+    blocTest<WalletBloc, WalletState>(
       'WalletProvisionRetryRequested surfaces a failure',
       setUp: () => walletRepository.retryProvisionException = const ApiException(
         errorCode: 'PROVISION_FAILED',
