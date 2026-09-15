@@ -937,10 +937,11 @@ class _BentoTile extends StatelessWidget {
   }
 }
 
-/// Matches the reference mockup's bottom nav bar. Only Home is real —
-/// Schedule/Wallet/Profile have no screens or specs behind them yet, so
-/// they're visually present but disabled (`onTap: null`), same "present
-/// per mockup, not yet wired" treatment used elsewhere on this screen.
+/// Matches the reference mockup's bottom nav bar. MA-125 wires **Wallet**
+/// (FR-1, `context.go('/wallet')` — a top-level destination, not a push);
+/// Schedule/Profile remain stubs with no screens or specs behind them yet,
+/// same "present per mockup, not yet wired" treatment used elsewhere on
+/// this screen.
 class _HomeBottomNav extends StatelessWidget {
   const _HomeBottomNav();
 
@@ -949,7 +950,11 @@ class _HomeBottomNav extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
     return BottomNavigationBar(
       currentIndex: 0,
-      onTap: null,
+      onTap: (index) {
+        if (index == 2) context.go('/wallet');
+        // 1 (Schedule) and 3 (Profile) remain stubs. Home (0) is already
+        // the current tab, so tapping it is a no-op.
+      },
       selectedItemColor: primary,
       unselectedItemColor: Colors.grey.shade400,
       items: const [

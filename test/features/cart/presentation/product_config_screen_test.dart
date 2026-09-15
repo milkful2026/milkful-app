@@ -6,7 +6,7 @@ import 'package:milkful_app/features/auth/data/profile_repository.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
 import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/cart/data/pricing_repository.dart';
-import 'package:milkful_app/features/cart/data/wallet_balance_repository.dart';
+import 'package:milkful_app/features/wallet/data/wallet_balance_repository.dart';
 import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/cart/presentation/product_config_screen.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';

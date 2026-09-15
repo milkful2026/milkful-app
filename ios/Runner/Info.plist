@@ -28,6 +28,17 @@
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Used to center the map on your current location when picking a delivery address.</string>
+	<!-- MA-125 FR-10: lets razorpay_flutter's checkout sheet deep-link into
+	     an installed UPI app for the intent flow; without these, iOS just
+	     falls back to Razorpay's own in-sheet UPI collect. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tez</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>bhim</string>
+		<string>credpay</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

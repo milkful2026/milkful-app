@@ -44,4 +44,27 @@ class AppConfig {
   /// default — pass via --dart-define=GOOGLE_MAPS_API_KEY=... at run/build
   /// time; never hardcode the real key here (this file is committed).
   static const googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+
+  /// Wallet Service (MA-100, `services/wallet`) — real, Aurora-backed.
+  static const walletBaseUrl = String.fromEnvironment(
+    'WALLET_BASE_URL',
+    defaultValue: 'http://localhost:8006',
+  );
+
+  /// Payment Service (MA-99, `services/payment`) — real, Aurora-backed;
+  /// scoped to Razorpay wallet-recharge (MA-126).
+  static const paymentBaseUrl = String.fromEnvironment(
+    'PAYMENT_BASE_URL',
+    defaultValue: 'http://localhost:8007',
+  );
+
+  /// Razorpay **publishable** key id only — never the key secret or the
+  /// webhook secret, which never leave Payment Service. Empty in a build
+  /// that hasn't set it; [RazorpayCheckout] guards against that rather
+  /// than letting the SDK fail with a confusing error (MA-125 §9).
+  static const razorpayKeyId = String.fromEnvironment('RAZORPAY_KEY_ID');
+
+  /// Dark-ships the Wallet tab (MA-24) until Payment/Wallet Service are
+  /// deployed somewhere this build can reach — see MA-125 §11.
+  static const walletEnabled = bool.fromEnvironment('WALLET_ENABLED');
 }
