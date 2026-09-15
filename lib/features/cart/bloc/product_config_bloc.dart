@@ -10,7 +10,7 @@ import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
 import '../data/cart_repository.dart';
 import '../data/pricing_repository.dart';
-import '../data/wallet_balance_repository.dart';
+import '../../wallet/data/wallet_balance_repository.dart';
 import 'product_config_event.dart';
 import 'product_config_state.dart';
 

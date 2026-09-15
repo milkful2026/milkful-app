@@ -15,7 +15,7 @@ import 'package:milkful_app/features/auth/data/profile_repository.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
 import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/cart/data/pricing_repository.dart';
-import 'package:milkful_app/features/cart/data/wallet_balance_repository.dart';
+import 'package:milkful_app/features/wallet/data/wallet_balance_repository.dart';
 import 'package:milkful_app/features/cart/models/cart_line_item.dart';
 import 'package:milkful_app/features/cart/models/cart_view.dart';
 import 'package:milkful_app/features/cart/models/frequency.dart';

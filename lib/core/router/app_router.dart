@@ -15,6 +15,10 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/wallet/presentation/wallet_coming_soon.dart';
+import '../../features/wallet/presentation/wallet_screen.dart';
+import '../../features/wallet/presentation/wallet_transactions_placeholder.dart';
+import '../config/app_config.dart';
 
 /// Route list covers both specs' screen flows:
 /// Welcome → Sign Up → OTP Verify → Address → Home (MA-1) — Name, delivery
@@ -96,6 +100,20 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
           if (product is! Product) return const HomeScreen();
           return ProductConfigScreen(product: product);
         },
+      ),
+      // MA-125 FR-1. A top-level `go` destination off the bottom nav, like
+      // `/home` — dark-shipped behind `WALLET_ENABLED` until MA-126/MA-127
+      // are reachable from this build.
+      GoRoute(
+        path: '/wallet',
+        builder: (context, state) =>
+            AppConfig.walletEnabled ? const WalletScreen() : const WalletComingSoon(),
+      ),
+      // Reached from the balance card's Passbook button and the "View All
+      // Transactions" link; MA-27 replaces this builder.
+      GoRoute(
+        path: '/wallet/transactions',
+        builder: (context, state) => const WalletTransactionsPlaceholder(),
       ),
     ],
   );

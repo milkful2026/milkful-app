@@ -13,11 +13,15 @@ import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/profile_repository.dart';
 import 'features/cart/data/cart_repository.dart';
 import 'features/cart/data/pricing_repository.dart';
-import 'features/cart/data/wallet_balance_repository.dart';
 import 'features/catalog/data/catalog_repository.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
 import 'features/onboarding/data/places_repository.dart';
 import 'features/onboarding/data/registration_repository.dart';
+import 'features/wallet/data/dio_wallet_balance_repository.dart';
+import 'features/wallet/data/pending_recharge_store.dart';
+import 'features/wallet/data/razorpay_checkout.dart';
+import 'features/wallet/data/wallet_balance_repository.dart';
+import 'features/wallet/data/wallet_repository.dart';
 
 void main() {
   runApp(const MilkfulApp());
@@ -45,10 +49,20 @@ class MilkfulApp extends StatelessWidget {
     // services at services/cart and services/pricing-offer.
     final pricingRepository = DioPricingRepository(apiClient);
     final cartRepository = DioCartRepository(apiClient);
-    // MA-100 (Wallet Service) doesn't exist at all — not even a spec — so
-    // there's no contract to implement against yet. See
-    // wallet_balance_repository.dart's own doc comment.
-    const walletBalanceRepository = StubWalletBalanceRepository();
+    // MA-24/MA-127 (Wallet Service) is now real — see
+    // dio_wallet_balance_repository.dart's own doc comment for how this
+    // preserves MA-120's whole-rupee `getBalance()` contract on top of it.
+    final walletRepository = DioWalletRepository(apiClient);
+    final walletBalanceRepository = DioWalletBalanceRepository(walletRepository);
+    final pendingRechargeStore = SharedPreferencesPendingRechargeStore();
+    final paymentMethodStore = SharedPreferencesPaymentMethodStore();
+    // A fresh SDK instance shared across every Wallet screen visit for the
+    // app's lifetime — `WalletBloc.close()` calls `.dispose()` (Razorpay's
+    // `clear()`) on it each time the screen is left, and the next visit's
+    // bloc simply re-registers its listeners via `.on(...)` on the same
+    // instance, matching how `SecureTokenStorage`/`DraftStorage` are
+    // shared, long-lived singletons rather than screen-scoped.
+    final razorpayCheckout = RealRazorpayCheckout();
     // A separate, plain Dio — Google's Places/Geocoding APIs use their own
     // response envelope, not this app's backend's, so they don't go through
     // ApiClient (which would try to unwrap {requestId,status,data}) or carry
@@ -72,7 +86,11 @@ class MilkfulApp extends StatelessWidget {
         RepositoryProvider<ProfileRepository>.value(value: profileRepository),
         RepositoryProvider<PricingRepository>.value(value: pricingRepository),
         RepositoryProvider<CartRepository>.value(value: cartRepository),
+        RepositoryProvider<WalletRepository>.value(value: walletRepository),
         RepositoryProvider<WalletBalanceRepository>.value(value: walletBalanceRepository),
+        RepositoryProvider<PendingRechargeStore>.value(value: pendingRechargeStore),
+        RepositoryProvider<PaymentMethodStore>.value(value: paymentMethodStore),
+        RepositoryProvider<RazorpayCheckout>.value(value: razorpayCheckout),
       ],
       child: MultiBlocProvider(
         providers: [
