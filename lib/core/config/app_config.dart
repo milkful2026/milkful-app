@@ -67,4 +67,21 @@ class AppConfig {
   /// Dark-ships the Wallet tab (MA-24) until Payment/Wallet Service are
   /// deployed somewhere this build can reach — see MA-125 §11.
   static const walletEnabled = bool.fromEnvironment('WALLET_ENABLED');
+
+  /// Subscription Service (MA-131, `services/subscription`) — real,
+  /// Aurora-backed. No feature flag (unlike [walletEnabled]) — ships live
+  /// once merged, per MA-133 §4 FR-1's own decision (no external gateway
+  /// dependency blocking it the way Razorpay credentials blocked Wallet).
+  static const subscriptionBaseUrl = String.fromEnvironment(
+    'SUBSCRIPTION_BASE_URL',
+    defaultValue: 'http://localhost:8008',
+  );
+
+  /// Order Service (MA-132, `services/order`) — not called directly by any
+  /// screen yet (MA-133 §8); added now since a future order-status
+  /// affordance will need it.
+  static const orderBaseUrl = String.fromEnvironment(
+    'ORDER_BASE_URL',
+    defaultValue: 'http://localhost:8009',
+  );
 }

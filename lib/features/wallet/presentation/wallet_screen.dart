@@ -885,7 +885,8 @@ class _WalletBottomNav extends StatelessWidget {
       unselectedItemColor: Colors.grey.shade400,
       onTap: (index) {
         if (index == 0) context.go('/home');
-        // 1 (Schedule) and 3 (Profile) remain stubs, same as Home's nav.
+        if (index == 1) context.go('/subscriptions');
+        // 3 (Profile) remains a stub, same as Home's nav.
       },
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),

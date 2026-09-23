@@ -50,7 +50,12 @@ void main() {
             .having((s) => s.phase, 'phase', RegistrationPhase.checkingServiceability),
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.submitting)
-            .having((s) => s.draft.zoneId, 'zoneId', 'blr-central'),
+            .having((s) => s.draft.zoneId, 'zoneId', 'blr-central')
+            // MA-25 Step 6 — the address itself (not just the ephemeral
+            // top-level draft.zoneId) must carry the resolved zoneId too,
+            // since that's what toRegisterJson() actually sends to the
+            // backend for persistence.
+            .having((s) => s.draft.address?.zoneId, 'address.zoneId', 'blr-central'),
         isA<RegistrationState>()
             .having((s) => s.phase, 'phase', RegistrationPhase.success)
             .having((s) => s.result?.userId, 'userId', 'user-1')

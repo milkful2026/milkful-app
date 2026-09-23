@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
+import '../../onboarding/data/registration_repository.dart';
+import '../../subscriptions/data/subscription_repository.dart';
 import '../bloc/product_config_bloc.dart';
 import '../bloc/product_config_event.dart';
 import '../bloc/product_config_state.dart';
@@ -36,6 +38,8 @@ class ProductConfigScreen extends StatelessWidget {
         cartRepository: context.read<CartRepository>(),
         walletBalanceRepository: context.read<WalletBalanceRepository>(),
         profileRepository: context.read<ProfileRepository>(),
+        registrationRepository: context.read<RegistrationRepository>(),
+        subscriptionRepository: context.read<SubscriptionRepository>(),
       )..add(ProductConfigStarted(product)),
       child: const _ProductConfigView(),
     );
@@ -190,6 +194,36 @@ class _ProductConfigViewState extends State<_ProductConfigView> {
                         onDecrease: () => _changeQuantity(-1, product),
                         onIncrease: () => _changeQuantity(1, product),
                       ),
+                      // MA-133 FR-6 — new UI, not in the mock (MA-133 §11
+                      // Risk): a required delivery-slot picker for the
+                      // subscription create flow. No slots (missing zone
+                      // or an empty response) → nothing renders here and
+                      // Subscribe Now stays disabled
+                      // (ProductConfigState.slotGateBlocks).
+                      if (state.frequency.isSubscription && state.slots.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Text(
+                          'Select Delivery Slot',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        _SlotChipRow(
+                          slots: state.slots,
+                          selectedSlotId: state.slotId,
+                        ),
+                      ],
+                      if (state.frequency.isSubscription &&
+                          state.slotsStatus == SlotsStatus.failed)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Text(
+                            "Couldn't load delivery slots for your address",
+                            key: const Key('product-config-slots-error'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
                       if (state.frequency.isSubscription &&
                           state.walletCheckStatus ==
                               WalletCheckStatus.insufficient)
@@ -433,6 +467,34 @@ class _StartDatePicker extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SlotChipRow extends StatelessWidget {
+  const _SlotChipRow({required this.slots, required this.selectedSlotId});
+
+  final List<DeliverySlot> slots;
+  final String? selectedSlotId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final slot in slots)
+          ChoiceChip(
+            key: Key('product-config-slot-${slot.id}'),
+            label: Text(slot.label),
+            selected: selectedSlotId == slot.id,
+            onSelected: slot.available
+                ? (_) => context.read<ProductConfigBloc>().add(SlotSelected(slot.id))
+                : null,
+            disabledColor: theme.colorScheme.surfaceContainerHighest,
+          ),
+      ],
     );
   }
 }

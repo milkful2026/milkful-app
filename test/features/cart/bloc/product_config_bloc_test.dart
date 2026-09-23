@@ -8,11 +8,15 @@ import 'package:milkful_app/features/cart/bloc/product_config_state.dart';
 import 'package:milkful_app/features/cart/models/frequency.dart';
 import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
+import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
+import 'package:milkful_app/features/subscriptions/models/schedule.dart';
 
 import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_pricing_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
+import '../../../fakes/fake_registration_repository.dart';
+import '../../../fakes/fake_subscription_repository.dart';
 import '../../../fakes/fake_wallet_balance_repository.dart';
 
 const _product = Product(
@@ -41,6 +45,8 @@ void main() {
     late FakeCartRepository cartRepository;
     late FakeWalletBalanceRepository walletBalanceRepository;
     late FakeProfileRepository profileRepository;
+    late FakeRegistrationRepository registrationRepository;
+    late FakeSubscriptionRepository subscriptionRepository;
 
     setUp(() {
       catalogRepository = FakeCatalogRepository(
@@ -49,6 +55,9 @@ void main() {
       pricingRepository = FakePricingRepository(result: _quote);
       cartRepository = FakeCartRepository();
       walletBalanceRepository = FakeWalletBalanceRepository(balance: 600);
+      // MA-25 Step 6 — defaultAddressZoneId is what the slot picker reads
+      // (not RegistrationBloc's ephemeral draft.zoneId); most tests below
+      // want it populated so the slot-fetch path actually runs.
       profileRepository = FakeProfileRepository(
         profile: const UserProfile(
           userId: 'user-1',
@@ -57,8 +66,16 @@ void main() {
           accountType: 'B2C',
           defaultAddressId: 'addr-1',
           defaultAddressState: 'Karnataka',
+          defaultAddressZoneId: 'zone-1',
         ),
       );
+      registrationRepository = FakeRegistrationRepository(
+        slots: const [
+          DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM'),
+          DeliverySlot(id: 'evening-6-8', label: 'Evening 6-8 PM'),
+        ],
+      );
+      subscriptionRepository = FakeSubscriptionRepository();
     });
 
     ProductConfigBloc build() => ProductConfigBloc(
@@ -68,6 +85,8 @@ void main() {
       cartRepository: cartRepository,
       walletBalanceRepository: walletBalanceRepository,
       profileRepository: profileRepository,
+      registrationRepository: registrationRepository,
+      subscriptionRepository: subscriptionRepository,
     );
 
     blocTest<ProductConfigBloc, ProductConfigState>(
@@ -212,6 +231,131 @@ void main() {
         );
         expect(bloc.state.addStatus, AddStatus.success);
         expect(bloc.state.addIdempotencyKey, isNull);
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      'switching to a subscription frequency fetches delivery slots and '
+      'defaults to the first available one',
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.slotsStatus, SlotsStatus.loaded);
+        expect(bloc.state.slots, hasLength(2));
+        expect(bloc.state.slotId, 'morning-6-8');
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      // Regression for the review-fixed RegistrationBloc-sourced gap: a
+      // returning user with no in-session registration draft must still
+      // reach a working (if empty) state, not a crash — see
+      // product_config_bloc.dart's own comment on why this reads
+      // defaultAddressZoneId, never RegistrationBloc.state.draft.zoneId.
+      'a null defaultAddressZoneId never calls getDeliverySlots and the '
+      'slot row stays empty',
+      build: () {
+        profileRepository.profile = const UserProfile(
+          userId: 'user-1',
+          name: 'Priya Sharma',
+          mobile: '+919876543210',
+          accountType: 'B2C',
+          defaultAddressId: 'addr-1',
+          defaultAddressState: 'Karnataka',
+        );
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.slotsStatus, SlotsStatus.notApplicable);
+        expect(bloc.state.slots, isEmpty);
+        expect(bloc.state.slotId, isNull);
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      'SlotSelected updates the selected slot',
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const SlotSelected('evening-6-8'));
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) => expect(bloc.state.slotId, 'evening-6-8'),
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      'canConfirm is false for a subscription frequency with no slot selected',
+      build: () {
+        registrationRepository.slots = const [];
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.slotId, isNull);
+        expect(bloc.state.slotGateBlocks, isTrue);
+        expect(bloc.state.canConfirm, isFalse);
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      'AddToCartRequested for a subscription frequency calls '
+      'SubscriptionRepository.create (not CartRepository.addItem) with '
+      'the selected slot',
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const AddToCartRequested());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.addStatus, AddStatus.success);
+        expect(subscriptionRepository.lastCreateRequest, isNotNull);
+        expect(subscriptionRepository.lastCreateRequest!['productId'], 'cow-milk');
+        expect(subscriptionRepository.lastCreateRequest!['slotId'], 'morning-6-8');
+        expect(
+          (subscriptionRepository.lastCreateRequest!['schedule'] as Schedule).type,
+          ScheduleType.daily,
+        );
+        expect(cartRepository.requests, isEmpty);
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
+      'a one-time confirm still calls CartRepository.addItem; '
+      'SubscriptionRepository.create is never called',
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const AddToCartRequested());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.addStatus, AddStatus.success);
+        expect(cartRepository.requests, hasLength(1));
+        expect(subscriptionRepository.lastCreateRequest, isNull);
       },
     );
   });

@@ -13,6 +13,21 @@ void main() {
       });
 
       expect(profile.defaultAddressId, 'addr-1');
+      expect(profile.defaultAddressZoneId, isNull);
+    });
+
+    test('parses defaultAddressZoneId when the backend sends one', () {
+      final profile = UserProfile.fromJson({
+        'userId': 'user-1',
+        'name': 'Priya Sharma',
+        'mobile': '+919876543210',
+        'accountType': 'B2C',
+        'defaultAddressId': 'addr-1',
+        'defaultAddressState': 'Karnataka',
+        'defaultAddressZoneId': 'zone-blr-1',
+      });
+
+      expect(profile.defaultAddressZoneId, 'zone-blr-1');
     });
 
     test(

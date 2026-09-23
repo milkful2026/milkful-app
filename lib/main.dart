@@ -17,6 +17,7 @@ import 'features/catalog/data/catalog_repository.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
 import 'features/onboarding/data/places_repository.dart';
 import 'features/onboarding/data/registration_repository.dart';
+import 'features/subscriptions/data/subscription_repository.dart';
 import 'features/wallet/data/dio_wallet_balance_repository.dart';
 import 'features/wallet/data/pending_recharge_store.dart';
 import 'features/wallet/data/razorpay_checkout.dart';
@@ -54,6 +55,11 @@ class MilkfulApp extends StatelessWidget {
     // preserves MA-120's whole-rupee `getBalance()` contract on top of it.
     final walletRepository = DioWalletRepository(apiClient);
     final walletBalanceRepository = DioWalletBalanceRepository(walletRepository);
+    // MA-25/MA-131 (Subscription Service) is now real — see
+    // subscription_repository.dart's own doc comments for the two places
+    // its wire contract diverges from a full detail response
+    // (create/edit).
+    final subscriptionRepository = DioSubscriptionRepository(apiClient);
     final pendingRechargeStore = SharedPreferencesPendingRechargeStore();
     final paymentMethodStore = SharedPreferencesPaymentMethodStore();
     // A fresh SDK instance shared across every Wallet screen visit for the
@@ -86,6 +92,8 @@ class MilkfulApp extends StatelessWidget {
         RepositoryProvider<ProfileRepository>.value(value: profileRepository),
         RepositoryProvider<PricingRepository>.value(value: pricingRepository),
         RepositoryProvider<CartRepository>.value(value: cartRepository),
+        RepositoryProvider<RegistrationRepository>.value(value: registrationRepository),
+        RepositoryProvider<SubscriptionRepository>.value(value: subscriptionRepository),
         RepositoryProvider<WalletRepository>.value(value: walletRepository),
         RepositoryProvider<WalletBalanceRepository>.value(value: walletBalanceRepository),
         RepositoryProvider<PendingRechargeStore>.value(value: pendingRechargeStore),

@@ -54,6 +54,17 @@ class AddToCartRequested extends ProductConfigEvent {
   const AddToCartRequested();
 }
 
+/// MA-133 FR-6. Fired when the customer picks a different slot chip than
+/// the one auto-selected on load.
+class SlotSelected extends ProductConfigEvent {
+  const SlotSelected(this.slotId);
+
+  final String slotId;
+
+  @override
+  List<Object?> get props => [slotId];
+}
+
 /// Internal — fired by the three selection-changing events above (after
 /// each updates `state.selection`) rather than requested directly by the
 /// screen. Funnels every quote-triggering change through one event type so

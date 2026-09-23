@@ -13,6 +13,8 @@ import 'package:milkful_app/features/wallet/data/wallet_balance_repository.dart'
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/onboarding/bloc/registration_bloc.dart';
+import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
+import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 import '../../fakes/fake_cart_repository.dart';
@@ -22,6 +24,7 @@ import '../../fakes/fake_pricing_repository.dart';
 import '../../fakes/fake_profile_repository.dart';
 import '../../fakes/fake_registration_repository.dart';
 import '../../fakes/fake_secure_token_storage.dart';
+import '../../fakes/fake_subscription_repository.dart';
 import '../../fakes/fake_wallet_balance_repository.dart';
 
 const _cowMilk = Product(
@@ -52,6 +55,12 @@ void main() {
           ),
           RepositoryProvider<ProfileRepository>.value(
             value: FakeProfileRepository(),
+          ),
+          RepositoryProvider<RegistrationRepository>.value(
+            value: FakeRegistrationRepository(),
+          ),
+          RepositoryProvider<SubscriptionRepository>.value(
+            value: FakeSubscriptionRepository(),
           ),
         ],
         child: BlocProvider<AuthBloc>.value(
