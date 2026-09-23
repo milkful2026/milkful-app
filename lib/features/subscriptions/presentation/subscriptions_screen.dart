@@ -10,6 +10,7 @@ import '../bloc/subscription_state.dart';
 import '../data/subscription_repository.dart';
 import '../models/subscription_status.dart';
 import '../models/subscription_view.dart';
+import 'custom_schedule_sheet.dart';
 import 'subscription_detail_sheet.dart';
 
 final _dateFormat = DateFormat('MMM d');
@@ -47,6 +48,25 @@ class _SubscriptionsView extends StatelessWidget {
     );
   }
 
+  /// MA-133 FR-7. Every repository `CustomScheduleSheet` needs
+  /// (`CatalogRepository`, `ProfileRepository`, `RegistrationRepository`,
+  /// `SubscriptionRepository`) is already app-wide (`main.dart`'s
+  /// `MultiRepositoryProvider`), unlike `SubscriptionBloc` above which is
+  /// scoped to this screen — so no explicit `.value` wiring is needed
+  /// here, only refreshing this screen's own bloc once the sheet reports
+  /// a successful create.
+  Future<void> _openCustomScheduleSheet(BuildContext context) async {
+    final bloc = context.read<SubscriptionBloc>();
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => const CustomScheduleSheet(),
+    );
+    if (created == true) {
+      bloc.add(const SubscriptionsRefreshRequested());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,7 +92,13 @@ class _SubscriptionsView extends StatelessWidget {
             return Column(
               children: [
                 const _SubscriptionsAppBarRow(),
-                Expanded(child: _SubscriptionsBody(state: state, onOpenDetail: _openDetailSheet)),
+                Expanded(
+                  child: _SubscriptionsBody(
+                    state: state,
+                    onOpenDetail: _openDetailSheet,
+                    onOpenCustomSchedule: _openCustomScheduleSheet,
+                  ),
+                ),
               ],
             );
           },
@@ -111,10 +137,15 @@ class _SubscriptionsAppBarRow extends StatelessWidget {
 }
 
 class _SubscriptionsBody extends StatelessWidget {
-  const _SubscriptionsBody({required this.state, required this.onOpenDetail});
+  const _SubscriptionsBody({
+    required this.state,
+    required this.onOpenDetail,
+    required this.onOpenCustomSchedule,
+  });
 
   final SubscriptionsState state;
   final Future<void> Function(BuildContext, SubscriptionView) onOpenDetail;
+  final Future<void> Function(BuildContext) onOpenCustomSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +194,10 @@ class _SubscriptionsBody extends StatelessWidget {
                   const SizedBox(height: 12),
                 ],
               const SizedBox(height: 12),
-              _NewProductPromo(onSubscribe: () => context.push('/catalog')),
+              _NewProductPromo(
+                onSubscribe: () => context.push('/catalog'),
+                onCustomSchedule: () => onOpenCustomSchedule(context),
+              ),
             ],
           ),
         );
@@ -423,9 +457,10 @@ class _SubscriptionCard extends StatelessWidget {
 }
 
 class _NewProductPromo extends StatelessWidget {
-  const _NewProductPromo({required this.onSubscribe});
+  const _NewProductPromo({required this.onSubscribe, required this.onCustomSchedule});
 
   final VoidCallback onSubscribe;
+  final VoidCallback onCustomSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -460,11 +495,10 @@ class _NewProductPromo extends StatelessWidget {
               const SizedBox(width: 12),
               TextButton(
                 key: const Key('subscriptions-custom-schedule-cta'),
-                // FR-7 — reaches WEEKLY/CUSTOM_DAYS schedules, which
-                // ProductConfigScreen's own frequency selector (FR-6)
-                // deliberately doesn't cover. Not yet wired to a
-                // dedicated flow (see this PR's own description).
-                onPressed: null,
+                // FR-7 — the only way to reach WEEKLY/CUSTOM_DAYS
+                // schedules, since ProductConfigScreen's own frequency
+                // selector (FR-6) deliberately doesn't cover them.
+                onPressed: onCustomSchedule,
                 child: const Text('Custom schedule'),
               ),
             ],
