@@ -951,9 +951,10 @@ class _HomeBottomNav extends StatelessWidget {
     return BottomNavigationBar(
       currentIndex: 0,
       onTap: (index) {
+        if (index == 1) context.go('/subscriptions');
         if (index == 2) context.go('/wallet');
-        // 1 (Schedule) and 3 (Profile) remain stubs. Home (0) is already
-        // the current tab, so tapping it is a no-op.
+        // 3 (Profile) remains a stub. Home (0) is already the current tab,
+        // so tapping it is a no-op.
       },
       selectedItemColor: primary,
       unselectedItemColor: Colors.grey.shade400,

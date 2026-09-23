@@ -11,6 +11,7 @@ class AddressDraft extends Equatable {
     required this.lat,
     required this.lng,
     this.landmark,
+    this.zoneId,
   });
 
   final List<String> lines;
@@ -21,6 +22,26 @@ class AddressDraft extends Equatable {
   final double lng;
   final String? landmark;
 
+  /// MA-25 Step 6 backend companion — resolved from
+  /// [ServiceabilityResult.zoneId] during address entry (see
+  /// address_screen.dart) and persisted server-side as this address's
+  /// `zone_id`, so `GET /users/me`'s `defaultAddressZoneId` has a real
+  /// value for a returning user (`RegistrationDraft.zoneId` above is
+  /// session-only and discarded after registration succeeds — this is the
+  /// field that survives).
+  final String? zoneId;
+
+  AddressDraft copyWith({String? zoneId}) => AddressDraft(
+        lines: lines,
+        city: city,
+        state: state,
+        pincode: pincode,
+        lat: lat,
+        lng: lng,
+        landmark: landmark,
+        zoneId: zoneId ?? this.zoneId,
+      );
+
   Map<String, dynamic> toRegisterJson() => {
         'lines': lines,
         'city': city,
@@ -29,6 +50,7 @@ class AddressDraft extends Equatable {
         'lat': lat,
         'lng': lng,
         if (landmark != null) 'landmark': landmark,
+        if (zoneId != null) 'zoneId': zoneId,
         'isDefault': true,
       };
 
@@ -40,6 +62,7 @@ class AddressDraft extends Equatable {
         'lat': lat,
         'lng': lng,
         'landmark': landmark,
+        'zoneId': zoneId,
       };
 
   factory AddressDraft.fromDraftJson(Map<String, dynamic> json) => AddressDraft(
@@ -50,10 +73,11 @@ class AddressDraft extends Equatable {
         lat: (json['lat'] as num).toDouble(),
         lng: (json['lng'] as num).toDouble(),
         landmark: json['landmark'] as String?,
+        zoneId: json['zoneId'] as String?,
       );
 
   @override
-  List<Object?> get props => [lines, city, state, pincode, lat, lng, landmark];
+  List<Object?> get props => [lines, city, state, pincode, lat, lng, landmark, zoneId];
 }
 
 /// Local onboarding draft — per spec §7. Persisted to shared_preferences on

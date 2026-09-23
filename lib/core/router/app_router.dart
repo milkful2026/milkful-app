@@ -15,6 +15,7 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 import '../../features/wallet/presentation/wallet_transactions_placeholder.dart';
@@ -115,6 +116,10 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
         path: '/wallet/transactions',
         builder: (context, state) => const WalletTransactionsPlaceholder(),
       ),
+      // MA-133 FR-1. A top-level `go` destination off the bottom nav, like
+      // `/wallet` — no feature flag (unlike `/wallet`'s `walletEnabled`),
+      // ships live once merged per MA-133 §4 FR-1's own decision.
+      GoRoute(path: '/subscriptions', builder: (context, state) => const SubscriptionsScreen()),
     ],
   );
 }

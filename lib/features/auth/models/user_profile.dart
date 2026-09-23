@@ -9,6 +9,7 @@ class UserProfile extends Equatable {
     required this.accountType,
     required this.defaultAddressId,
     this.defaultAddressState,
+    this.defaultAddressZoneId,
   });
 
   final String userId;
@@ -21,6 +22,13 @@ class UserProfile extends Equatable {
   /// when this app instance predates the field's addition on the backend.
   final String? defaultAddressState;
 
+  /// MA-25 Step 6 backend companion — null when no default address is set,
+  /// the address predates this field, or this app instance predates it.
+  /// Used by ProductConfigBloc to resolve delivery slots for the
+  /// subscription slot picker, in place of RegistrationBloc's ephemeral
+  /// draft (see product_config_bloc.dart's own comment on why).
+  final String? defaultAddressZoneId;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
     userId: json['userId'] as String,
     name: json['name'] as String,
@@ -28,6 +36,7 @@ class UserProfile extends Equatable {
     accountType: json['accountType'] as String,
     defaultAddressId: json['defaultAddressId'] as String?,
     defaultAddressState: json['defaultAddressState'] as String?,
+    defaultAddressZoneId: json['defaultAddressZoneId'] as String?,
   );
 
   @override
@@ -38,5 +47,6 @@ class UserProfile extends Equatable {
     accountType,
     defaultAddressId,
     defaultAddressState,
+    defaultAddressZoneId,
   ];
 }

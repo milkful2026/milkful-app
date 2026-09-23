@@ -11,11 +11,15 @@ import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/cart/presentation/product_config_screen.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
+import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
+import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
 
 import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_pricing_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
+import '../../../fakes/fake_registration_repository.dart';
+import '../../../fakes/fake_subscription_repository.dart';
 import '../../../fakes/fake_wallet_balance_repository.dart';
 
 const _quote = Quote(
@@ -54,6 +58,8 @@ void main() {
   late FakeCartRepository cartRepository;
   late FakeWalletBalanceRepository walletBalanceRepository;
   late FakeProfileRepository profileRepository;
+  late FakeRegistrationRepository registrationRepository;
+  late FakeSubscriptionRepository subscriptionRepository;
   late GoRouter router;
 
   Future<void> pumpProductConfig(WidgetTester tester, Product product) async {
@@ -71,8 +77,13 @@ void main() {
         accountType: 'B2C',
         defaultAddressId: 'addr-1',
         defaultAddressState: 'Karnataka',
+        defaultAddressZoneId: 'zone-1',
       ),
     );
+    registrationRepository = FakeRegistrationRepository(
+      slots: const [DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM')],
+    );
+    subscriptionRepository = FakeSubscriptionRepository();
     router = GoRouter(
       initialLocation: '/',
       routes: [
@@ -93,6 +104,8 @@ void main() {
             value: walletBalanceRepository,
           ),
           RepositoryProvider<ProfileRepository>.value(value: profileRepository),
+          RepositoryProvider<RegistrationRepository>.value(value: registrationRepository),
+          RepositoryProvider<SubscriptionRepository>.value(value: subscriptionRepository),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),

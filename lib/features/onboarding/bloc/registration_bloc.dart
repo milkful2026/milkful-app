@@ -9,10 +9,9 @@ import 'registration_state.dart';
 
 class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
   RegistrationBloc({
-    required RegistrationRepository repository,
+    required this._repository,
     required DraftStorage draftStorage,
-  })  : _repository = repository,
-        _draftStorage = draftStorage,
+  })  : _draftStorage = draftStorage,
         super(RegistrationState.initial()) {
     on<DraftRestored>(_onDraftRestored);
     on<AddressSubmitted>(_onAddressSubmitted);
@@ -85,7 +84,15 @@ class RegistrationBloc extends Bloc<RegistrationEvent, RegistrationState> {
         );
         return;
       }
-      final draft = state.draft.copyWith(zoneId: result.zoneId);
+      // Both the top-level draft.zoneId (session-only — cleared once
+      // registration succeeds, see registration_repository.dart) and the
+      // address's own zoneId (persisted server-side as the address row's
+      // zone_id — MA-25 Step 6) are set here: the same checkServiceability
+      // response is the only place either one is ever resolved from.
+      final draft = state.draft.copyWith(
+        address: address.copyWith(zoneId: result.zoneId),
+        zoneId: result.zoneId,
+      );
       await _persist(draft);
       emit(state.copyWith(draft: draft, phase: RegistrationPhase.submitting));
       await _submitRegistration(emit);
