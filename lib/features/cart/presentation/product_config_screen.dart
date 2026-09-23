@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/delivery_slot_chip_row.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
@@ -207,9 +208,13 @@ class _ProductConfigViewState extends State<_ProductConfigView> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
-                        _SlotChipRow(
+                        DeliverySlotChipRow(
                           slots: state.slots,
                           selectedSlotId: state.slotId,
+                          onSlotSelected: (id) => context
+                              .read<ProductConfigBloc>()
+                              .add(SlotSelected(id)),
+                          keyPrefix: 'product-config-slot',
                         ),
                       ],
                       if (state.frequency.isSubscription &&
@@ -467,34 +472,6 @@ class _StartDatePicker extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _SlotChipRow extends StatelessWidget {
-  const _SlotChipRow({required this.slots, required this.selectedSlotId});
-
-  final List<DeliverySlot> slots;
-  final String? selectedSlotId;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final slot in slots)
-          ChoiceChip(
-            key: Key('product-config-slot-${slot.id}'),
-            label: Text(slot.label),
-            selected: selectedSlotId == slot.id,
-            onSelected: slot.available
-                ? (_) => context.read<ProductConfigBloc>().add(SlotSelected(slot.id))
-                : null,
-            disabledColor: theme.colorScheme.surfaceContainerHighest,
-          ),
-      ],
     );
   }
 }

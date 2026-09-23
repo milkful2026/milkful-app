@@ -34,7 +34,11 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     required this._subscriptionRepository,
   }) : super(ProductConfigState.initial(product)) {
     on<ProductConfigStarted>(_onStarted);
-    on<FrequencyChanged>(_onFrequencyChanged);
+    // restartable(): a second FrequencyChanged racing the first's wallet
+    // check / slot fetch must not let the stale request's response land
+    // after the current one's and overwrite it — same race class (and
+    // same fix) as QuoteRequested below.
+    on<FrequencyChanged>(_onFrequencyChanged, transformer: restartable());
     on<StartDateChanged>(_onStartDateChanged);
     on<QuantityChanged>(_onQuantityChanged);
     on<SlotSelected>(_onSlotSelected);
@@ -129,13 +133,7 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     try {
       final slots = await _registrationRepository.getDeliverySlots(zoneId);
       if (isClosed) return;
-      String? firstAvailable;
-      for (final slot in slots) {
-        if (slot.available) {
-          firstAvailable = slot.id;
-          break;
-        }
-      }
+      final firstAvailable = slots.firstAvailableId;
       emit(
         state.copyWith(
           slotsStatus: SlotsStatus.loaded,

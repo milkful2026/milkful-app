@@ -448,11 +448,12 @@ class _SubscriptionCard extends StatelessWidget {
     if (subscription.status == SubscriptionStatus.paused) return 'Paused';
     final date = subscription.nextDeliveryDate;
     if (date == null) return 'No upcoming delivery';
+    final localDate = date.toLocal();
     final today = DateTime.now();
     final tomorrow = DateTime(today.year, today.month, today.day + 1);
-    final target = DateTime(date.year, date.month, date.day);
+    final target = DateTime(localDate.year, localDate.month, localDate.day);
     if (target == tomorrow) return 'Next delivery: Tomorrow';
-    return 'Next delivery: ${_dateFormat.format(date)}';
+    return 'Next delivery: ${_dateFormat.format(localDate)}';
   }
 }
 

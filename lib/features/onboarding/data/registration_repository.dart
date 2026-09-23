@@ -22,6 +22,18 @@ class DeliverySlot {
       );
 }
 
+extension DeliverySlotListX on List<DeliverySlot> {
+  /// The id of the first `available` slot, or `null` if none are —
+  /// shared default selection rule for every screen that auto-picks a
+  /// slot once its list loads (`ProductConfigBloc`, `CustomScheduleSheet`).
+  String? get firstAvailableId {
+    for (final slot in this) {
+      if (slot.available) return slot.id;
+    }
+    return null;
+  }
+}
+
 class ServiceabilityResult {
   const ServiceabilityResult({
     required this.serviceable,

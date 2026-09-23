@@ -33,11 +33,19 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionsState> {
   /// blocking the whole list.
   final CatalogRepository _catalogRepository;
 
+  /// A product's name never changes between one action's refetch and the
+  /// next, so once resolved it's kept here instead of re-querying Catalog
+  /// for every subscription on every pause/resume/stop/skip/edit refresh.
+  final Map<String, String> _productNameCache = {};
+
   Future<List<SubscriptionView>> _withProductNames(List<SubscriptionView> subscriptions) async {
     final results = await Future.wait(
       subscriptions.map((s) async {
+        final cached = _productNameCache[s.productId];
+        if (cached != null) return s.copyWithProductName(cached);
         try {
           final product = await _catalogRepository.getProduct(s.productId);
+          _productNameCache[s.productId] = product.name;
           return s.copyWithProductName(product.name);
         } catch (_) {
           return s;
@@ -136,7 +144,10 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionsState> {
     emit(
       state.copyWith(
         subscriptions: refreshed,
-        actionStatus: {for (final entry in state.actionStatus.entries) entry.key: ActionStatus.idle},
+        actionStatus: {
+          ...state.actionStatus,
+          for (final id in targetIds) id: ActionStatus.idle,
+        },
         lastActionMessage: failureMessage == null
             ? null
             : SubscriptionActionMessage(

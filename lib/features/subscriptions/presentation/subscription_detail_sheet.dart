@@ -222,14 +222,22 @@ class _EditFormState extends State<_EditForm> {
   void _submit() {
     Schedule? schedule;
     if (_showWeekdayToggles) {
-      schedule = Schedule(type: widget.subscription.schedule.type, daysOfWeek: _selectedDays.toList()..sort());
+      final days = _selectedDays.toList()..sort();
+      schedule = Schedule(
+        // Same day-count rule custom_schedule_sheet.dart's create flow
+        // uses — a single selected day reads as "weekly on {Day}", two or
+        // more as a custom-day pattern (Subscription Service itself
+        // treats WEEKLY/CUSTOM_DAYS identically). Recomputed here so
+        // adding/removing a day doesn't leave a stale type/label mismatch.
+        type: days.length == 1 ? ScheduleType.weekly : ScheduleType.customDays,
+        daysOfWeek: days,
+      );
     }
     Navigator.of(context).pop((quantity: _quantity, schedule: schedule));
   }
 
   @override
   Widget build(BuildContext context) {
-    const dayLabels = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
       child: Column(
@@ -260,7 +268,7 @@ class _EditFormState extends State<_EditForm> {
             Wrap(
               spacing: 8,
               children: [
-                for (final entry in dayLabels.entries)
+                for (final entry in scheduleDayLabels.entries)
                   FilterChip(
                     key: Key('subscription-edit-day-${entry.key}'),
                     label: Text(entry.value),

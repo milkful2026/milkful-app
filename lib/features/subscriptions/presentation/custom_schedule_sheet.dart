@@ -3,14 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/id_generator.dart';
+import '../../../core/widgets/delivery_slot_chip_row.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
 import '../../onboarding/data/registration_repository.dart';
 import '../data/subscription_repository.dart';
 import '../models/schedule.dart';
-
-const _dayLabels = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
 
 /// MA-133 FR-7 — the smallest addition that makes `WEEKLY`/`CUSTOM_DAYS`
 /// reachable at all, since `ProductConfigScreen`'s own frequency selector
@@ -91,16 +90,9 @@ class _CustomScheduleSheetState extends State<CustomScheduleSheet> {
       }
       final slots = await registrationRepository.getDeliverySlots(zoneId);
       if (!mounted) return;
-      String? firstAvailable;
-      for (final slot in slots) {
-        if (slot.available) {
-          firstAvailable = slot.id;
-          break;
-        }
-      }
       setState(() {
         _slots = slots;
-        _slotId = firstAvailable;
+        _slotId = slots.firstAvailableId;
         _slotsStatus = _LoadStatus.loaded;
       });
     } catch (_) {
@@ -110,6 +102,19 @@ class _CustomScheduleSheetState extends State<CustomScheduleSheet> {
         _slotsStatus = _LoadStatus.failed;
       });
     }
+  }
+
+  /// The first date on or after today whose ISO weekday is in [days] —
+  /// so a schedule's `startDate` always actually falls on one of its own
+  /// selected delivery days, instead of just "now" regardless of whether
+  /// today is one of them.
+  DateTime _firstMatchingDate(List<int> days) {
+    var date = DateTime.now();
+    for (var i = 0; i < 7; i++) {
+      if (days.contains(date.weekday)) return date;
+      date = date.add(const Duration(days: 1));
+    }
+    return date;
   }
 
   bool get _canSubmit =>
@@ -135,7 +140,7 @@ class _CustomScheduleSheetState extends State<CustomScheduleSheet> {
           type: days.length == 1 ? ScheduleType.weekly : ScheduleType.customDays,
           daysOfWeek: days,
         ),
-        startDate: DateTime.now(),
+        startDate: _firstMatchingDate(days),
         slotId: _slotId!,
         idempotencyKey: newHexId(),
       );
@@ -350,7 +355,7 @@ class _ScheduleForm extends StatelessWidget {
         Wrap(
           spacing: 8,
           children: [
-            for (final entry in _dayLabels.entries)
+            for (final entry in scheduleDayLabels.entries)
               FilterChip(
                 key: Key('custom-schedule-day-${entry.key}'),
                 label: Text(entry.value),
@@ -376,18 +381,11 @@ class _ScheduleForm extends StatelessWidget {
         ] else ...[
           const Text('Select Delivery Slot'),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final slot in slots)
-                ChoiceChip(
-                  key: Key('custom-schedule-slot-${slot.id}'),
-                  label: Text(slot.label),
-                  selected: selectedSlotId == slot.id,
-                  onSelected: slot.available ? (_) => onSlotSelected(slot.id) : null,
-                ),
-            ],
+          DeliverySlotChipRow(
+            slots: slots,
+            selectedSlotId: selectedSlotId,
+            onSlotSelected: onSlotSelected,
+            keyPrefix: 'custom-schedule-slot',
           ),
         ],
         if (submitError != null) ...[

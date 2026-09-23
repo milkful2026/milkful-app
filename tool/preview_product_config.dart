@@ -24,6 +24,12 @@ import 'package:milkful_app/features/cart/presentation/product_config_screen.dar
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/category.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
+import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
+import 'package:milkful_app/features/onboarding/models/registration_draft.dart';
+import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
+import 'package:milkful_app/features/subscriptions/models/schedule.dart';
+import 'package:milkful_app/features/subscriptions/models/subscription_status.dart';
+import 'package:milkful_app/features/subscriptions/models/subscription_view.dart';
 
 class _FakeCatalogRepository implements CatalogRepository {
   _FakeCatalogRepository(this.product);
@@ -100,7 +106,67 @@ class _FakeProfileRepository implements ProfileRepository {
     accountType: 'B2C',
     defaultAddressId: 'addr-1',
     defaultAddressState: 'Karnataka',
+    defaultAddressZoneId: 'zone-1',
   );
+}
+
+class _FakeRegistrationRepository implements RegistrationRepository {
+  @override
+  Future<ServiceabilityResult> checkServiceability({
+    required String pincode,
+    required double lat,
+    required double lng,
+  }) async => const ServiceabilityResult(serviceable: true, zoneId: 'zone-1', zoneName: 'Zone 1');
+
+  @override
+  Future<List<DeliverySlot>> getDeliverySlots(String zoneId) async => const [
+    DeliverySlot(id: 'morning-6-8', label: '6 AM - 8 AM'),
+    DeliverySlot(id: 'evening-6-8', label: '6 PM - 8 PM'),
+  ];
+
+  @override
+  Future<RegistrationResult> register(RegistrationDraft draft) async => const RegistrationResult(
+    userId: 'user-1',
+    walletId: 'wallet-1',
+    walletStatus: 'active',
+    defaultAddressId: 'addr-1',
+  );
+}
+
+class _FakeSubscriptionRepository implements SubscriptionRepository {
+  @override
+  Future<List<SubscriptionView>> list() async => const [];
+
+  @override
+  Future<SubscriptionView> create({
+    required String productId,
+    required int quantity,
+    required Schedule schedule,
+    required DateTime startDate,
+    required String slotId,
+    required String idempotencyKey,
+  }) async => SubscriptionView(
+    id: 'sub-1',
+    productId: productId,
+    quantity: quantity,
+    schedule: schedule,
+    status: SubscriptionStatus.active,
+  );
+
+  @override
+  Future<void> pause(String id, {DateTime? from, DateTime? until}) async {}
+
+  @override
+  Future<void> resume(String id) async {}
+
+  @override
+  Future<void> stop(String id) async {}
+
+  @override
+  Future<void> skip(String id, DateTime date) async {}
+
+  @override
+  Future<DateTime?> edit(String id, {int? quantity, Schedule? schedule}) async => null;
 }
 
 const _cowMilk = Product(
@@ -135,6 +201,8 @@ void main() {
         RepositoryProvider<CartRepository>.value(value: _FakeCartRepository()),
         RepositoryProvider<WalletBalanceRepository>.value(value: _FakeWalletBalanceRepository()),
         RepositoryProvider<ProfileRepository>.value(value: _FakeProfileRepository()),
+        RepositoryProvider<RegistrationRepository>.value(value: _FakeRegistrationRepository()),
+        RepositoryProvider<SubscriptionRepository>.value(value: _FakeSubscriptionRepository()),
       ],
       child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
     ),

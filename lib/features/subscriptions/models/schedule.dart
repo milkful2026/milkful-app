@@ -24,6 +24,10 @@ enum ScheduleType {
   };
 }
 
+/// ISO weekday (1=Monday..7=Sunday) -> short label, shared by every screen
+/// that renders or lets the customer pick delivery days.
+const scheduleDayLabels = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
+
 /// Mirrors subscription/src/domain/models.py's `Schedule` dataclass and
 /// its `to_dict()`/`ScheduleDto` wire shape. [daysOfWeek] is only ever
 /// non-null for [ScheduleType.weekly]/[ScheduleType.customDays] — ISO
@@ -62,9 +66,8 @@ class Schedule extends Equatable {
   }
 
   String _dayNames() {
-    const names = {1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun'};
     final days = daysOfWeek ?? const [];
-    return days.map((d) => names[d] ?? '?').join(', ');
+    return days.map((d) => scheduleDayLabels[d] ?? '?').join(', ');
   }
 
   @override
