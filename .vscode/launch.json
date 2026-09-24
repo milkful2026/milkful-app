@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "milkful-app (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "milkful-app (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows"
+    },
+    {
+      "name": "milkful-app (Chrome, profile)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "flutterMode": "profile"
+    },
+    {
+      // Android emulator: `localhost` inside the emulator is the emulator
+      // itself, not the host — 10.0.2.2 is the emulator's alias for the
+      // host machine. No deviceId pinned here (varies per machine/AVD);
+      // pick the running emulator from VS Code's device picker.
+      // GOOGLE_MAPS_API_KEY / RAZORPAY_KEY_ID are deliberately omitted —
+      // no safe committed default (see app_config.dart) — pass them via
+      // an uncommitted local override if you need those features.
+      "name": "milkful-app (Android Emulator, local backend)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=IDENTITY_AUTH_BASE_URL=http://10.0.2.2:8001",
+        "--dart-define=USER_BASE_URL=http://10.0.2.2:8002",
+        "--dart-define=INVENTORY_BASE_URL=http://10.0.2.2:8000",
+        "--dart-define=CATALOG_BASE_URL=http://10.0.2.2:8003",
+        "--dart-define=CART_BASE_URL=http://10.0.2.2:8004",
+        "--dart-define=PRICING_BASE_URL=http://10.0.2.2:8005",
+        "--dart-define=WALLET_BASE_URL=http://10.0.2.2:8006",
+        "--dart-define=PAYMENT_BASE_URL=http://10.0.2.2:8007",
+        "--dart-define=SUBSCRIPTION_BASE_URL=http://10.0.2.2:8008",
+        "--dart-define=ORDER_BASE_URL=http://10.0.2.2:8009"
+      ]
+    }
+  ]
+}

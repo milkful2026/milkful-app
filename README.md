@@ -34,6 +34,32 @@ flutter run -d chrome \
   --dart-define=INVENTORY_BASE_URL=https://...
 ```
 
+### Running on an Android emulator
+
+Unlike Chrome/Windows, an Android emulator can't reach the backend via `localhost` — that
+resolves to the emulator itself, not the host machine. The host is reachable at `10.0.2.2`
+instead, so **every** backend base URL needs a `--dart-define` override, not just the ones you'd
+normally customize:
+
+```bash
+flutter run --device-id=<your-emulator-id> \
+  --dart-define=IDENTITY_AUTH_BASE_URL=http://10.0.2.2:8001 \
+  --dart-define=USER_BASE_URL=http://10.0.2.2:8002 \
+  --dart-define=INVENTORY_BASE_URL=http://10.0.2.2:8000 \
+  --dart-define=CATALOG_BASE_URL=http://10.0.2.2:8003 \
+  --dart-define=CART_BASE_URL=http://10.0.2.2:8004 \
+  --dart-define=PRICING_BASE_URL=http://10.0.2.2:8005 \
+  --dart-define=WALLET_BASE_URL=http://10.0.2.2:8006 \
+  --dart-define=PAYMENT_BASE_URL=http://10.0.2.2:8007 \
+  --dart-define=SUBSCRIPTION_BASE_URL=http://10.0.2.2:8008 \
+  --dart-define=ORDER_BASE_URL=http://10.0.2.2:8009
+```
+
+A missed service here doesn't fail loudly — that screen just gets a generic "Connection refused"
+the first time it makes a call, since the value silently falls back to `app_config.dart`'s
+`localhost` default. `.vscode/launch.json`'s **"milkful-app (Android Emulator, local backend)"**
+config has the full list above pre-filled — prefer it over typing this by hand.
+
 ## Testing
 
 ```bash
