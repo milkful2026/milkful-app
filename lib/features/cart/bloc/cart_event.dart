@@ -24,6 +24,19 @@ class QuantityWriteRequested extends CartEvent {
   List<Object?> get props => [lineItemId, quantity];
 }
 
+/// Sent by [CartScreen] the moment a stepper tap starts its debounce wait,
+/// before the matching [QuantityWriteRequested]. Confirm Order stays
+/// disabled until that write has been sent (MA-137 FR-7: "no quantity
+/// update in flight" includes one still waiting to go out).
+class QuantityEditStarted extends CartEvent {
+  const QuantityEditStarted({required this.lineItemId});
+
+  final String lineItemId;
+
+  @override
+  List<Object?> get props => [lineItemId];
+}
+
 /// Sets [CartState.pendingRemovalId] so the screen can show the
 /// confirmation dialog (MA-123 FR-5) — does not itself remove anything.
 class ItemRemoveRequested extends CartEvent {
@@ -46,4 +59,22 @@ class ItemRemoveConfirmed extends CartEvent {
 
   @override
   List<Object?> get props => [lineItemId];
+}
+
+/// MA-137 FR-2/FR-5 — re-fetch the cart (and wallet balance) after coming
+/// back from Catalog or Wallet, keeping the current list on screen rather
+/// than flashing the loading skeleton.
+class CartRefreshRequested extends CartEvent {
+  const CartRefreshRequested();
+}
+
+/// MA-137 FR-7 — the Confirm Order button.
+class CheckoutRequested extends CartEvent {
+  const CheckoutRequested();
+}
+
+/// The screen has shown [CartState.checkoutFailure]; clear it so it's
+/// shown exactly once.
+class CheckoutFeedbackConsumed extends CartEvent {
+  const CheckoutFeedbackConsumed();
 }

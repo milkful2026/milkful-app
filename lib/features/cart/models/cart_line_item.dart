@@ -13,6 +13,7 @@ class CartLineItem extends Equatable {
     required this.frequency,
     required this.addedAt,
     this.startDate,
+    this.slotId,
   });
 
   final String id;
@@ -22,6 +23,12 @@ class CartLineItem extends Equatable {
   final String? startDate;
   final String addedAt;
 
+  /// MA-135 FR-1 — the delivery slot a subscription line was configured
+  /// with (required for subscriptions, always null for One Time). Carried
+  /// through `PUT /cart` unchanged, since Cart rejects a subscription line
+  /// without it.
+  final String? slotId;
+
   factory CartLineItem.fromJson(Map<String, dynamic> json) => CartLineItem(
     id: json['id'] as String,
     productId: json['productId'] as String,
@@ -29,6 +36,7 @@ class CartLineItem extends Equatable {
     frequency: Frequency.fromWire(json['frequency'] as String),
     startDate: json['startDate'] as String?,
     addedAt: json['addedAt'] as String,
+    slotId: json['slotId'] as String?,
   );
 
   /// Used by `CartRepository.updateItem` — `PUT /cart` (`ReplaceCartItemDto`
@@ -40,6 +48,7 @@ class CartLineItem extends Equatable {
     'quantity': quantity,
     'frequency': frequency.wireValue,
     'startDate': ?startDate,
+    'slotId': ?slotId,
   };
 
   CartLineItem copyWith({int? quantity}) =>
@@ -50,8 +59,9 @@ class CartLineItem extends Equatable {
         frequency: frequency,
         startDate: startDate,
         addedAt: addedAt,
+        slotId: slotId,
       );
 
   @override
-  List<Object?> get props => [id, productId, quantity, frequency, startDate, addedAt];
+  List<Object?> get props => [id, productId, quantity, frequency, startDate, addedAt, slotId];
 }

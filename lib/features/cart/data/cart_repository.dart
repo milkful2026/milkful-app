@@ -18,6 +18,7 @@ abstract class CartRepository {
     required Frequency frequency,
     required String idempotencyKey,
     DateTime? startDate,
+    String? slotId,
   });
 
   /// MA-123 FR-2. Never throws for "no cart yet" — Cart Service returns
@@ -50,6 +51,7 @@ class DioCartRepository implements CartRepository {
     required Frequency frequency,
     required String idempotencyKey,
     DateTime? startDate,
+    String? slotId,
   }) async {
     await _client.request(
       'POST',
@@ -59,7 +61,11 @@ class DioCartRepository implements CartRepository {
         'productId': productId,
         'quantity': quantity,
         'frequency': frequency.wireValue,
-        'startDate': ?startDate?.toIso8601String(),
+        // Date only (yyyy-MM-dd): the customer picks a day, and checkout
+        // hands this straight to Subscription Service as its startDate.
+        'startDate': ?startDate?.toIso8601String().substring(0, 10),
+        // MA-135 FR-1 — required for a subscription line.
+        'slotId': ?slotId,
       },
     );
   }

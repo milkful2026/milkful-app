@@ -10,7 +10,6 @@ import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
 import '../../onboarding/data/registration_repository.dart';
-import '../../subscriptions/data/subscription_repository.dart';
 import '../bloc/product_config_bloc.dart';
 import '../bloc/product_config_event.dart';
 import '../bloc/product_config_state.dart';
@@ -40,7 +39,6 @@ class ProductConfigScreen extends StatelessWidget {
         walletBalanceRepository: context.read<WalletBalanceRepository>(),
         profileRepository: context.read<ProfileRepository>(),
         registrationRepository: context.read<RegistrationRepository>(),
-        subscriptionRepository: context.read<SubscriptionRepository>(),
       )..add(ProductConfigStarted(product)),
       child: const _ProductConfigView(),
     );
@@ -118,8 +116,15 @@ class _ProductConfigViewState extends State<_ProductConfigView> {
             previous.addStatus != current.addStatus,
         listener: (context, state) {
           if (state.addStatus == AddStatus.success) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Added to cart')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  state.frequency.isSubscription
+                      ? 'Subscription added to cart'
+                      : 'Added to cart',
+                ),
+              ),
+            );
             context.pop();
           }
         },
@@ -634,10 +639,13 @@ class _BottomBar extends StatelessWidget {
                   : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(isSubscribing ? 'Subscribe Now' : 'Add to Cart'),
+                        // MA-137 FR-3 — a subscription is added to the cart
+                        // too and starts at Confirm Order, so both read
+                        // "Add to Cart"; the success SnackBar says which.
+                        const Text('Add to Cart'),
                         if (isSubscribing) ...[
                           const SizedBox(width: 8),
-                          const Icon(Icons.arrow_forward, size: 18),
+                          const Icon(Icons.shopping_cart_outlined, size: 18),
                         ],
                       ],
                     ),

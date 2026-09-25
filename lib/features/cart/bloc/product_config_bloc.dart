@@ -9,11 +9,9 @@ import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
 import '../../onboarding/data/registration_repository.dart';
-import '../../subscriptions/data/subscription_repository.dart';
-import '../../subscriptions/models/schedule.dart';
 import '../data/cart_repository.dart';
 import '../data/pricing_repository.dart';
-import '../models/frequency.dart';
+import '../models/wallet_rules.dart';
 import '../../wallet/data/wallet_balance_repository.dart';
 import 'product_config_event.dart';
 import 'product_config_state.dart';
@@ -31,7 +29,6 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     required this._walletBalanceRepository,
     required this._profileRepository,
     required this._registrationRepository,
-    required this._subscriptionRepository,
   }) : super(ProductConfigState.initial(product)) {
     on<ProductConfigStarted>(_onStarted);
     // restartable(): a second FrequencyChanged racing the first's wallet
@@ -57,7 +54,6 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
   final WalletBalanceRepository _walletBalanceRepository;
   final ProfileRepository _profileRepository;
   final RegistrationRepository _registrationRepository;
-  final SubscriptionRepository _subscriptionRepository;
 
   /// MA-133 FR-6 — resolved alongside [_deliveryState] in
   /// [_resolveDeliveryState] (same `getMe()` call, no extra round-trip).
@@ -236,7 +232,7 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
       if (isClosed) return;
       emit(
         state.copyWith(
-          walletCheckStatus: balance >= 500
+          walletCheckStatus: balance >= kSubscriptionMinWalletBalanceRupees
               ? WalletCheckStatus.sufficient
               : WalletCheckStatus.insufficient,
           walletBalance: balance,
@@ -264,27 +260,22 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     final key = state.addIdempotencyKey ?? newHexId();
     emit(state.copyWith(addStatus: AddStatus.loading, addIdempotencyKey: key));
     try {
-      if (state.frequency.isSubscription) {
-        // MA-133 FR-6 — a subscription-frequency confirm creates a real,
-        // standing subscription (MA-131 FR-1) instead of a cart line item.
-        // A one-time confirm below is completely unchanged.
-        await _subscriptionRepository.create(
-          productId: state.product.id,
-          quantity: state.quantity,
-          schedule: Schedule(type: _scheduleTypeFor(state.frequency)),
-          startDate: state.startDate ?? DateTime.now(),
-          slotId: state.slotId!, // guaranteed by canConfirm's slotGateBlocks check above
-          idempotencyKey: key,
-        );
-      } else {
-        await _cartRepository.addItem(
-          productId: state.product.id,
-          quantity: state.quantity,
-          frequency: state.frequency,
-          startDate: state.startDate,
-          idempotencyKey: key,
-        );
-      }
+      // MA-137 FR-3 (reverses MA-133 FR-6): a subscription goes into the
+      // cart like any other line, carrying its start date and delivery
+      // slot, and only becomes a real subscription at Confirm Order
+      // (MA-136 checkout) — so it can be reviewed and paid for together
+      // with one-time items.
+      final isSubscription = state.frequency.isSubscription;
+      await _cartRepository.addItem(
+        productId: state.product.id,
+        quantity: state.quantity,
+        frequency: state.frequency,
+        startDate: isSubscription ? (state.startDate ?? DateTime.now()) : state.startDate,
+        // Guaranteed non-null for a subscription by canConfirm's
+        // slotGateBlocks check above.
+        slotId: isSubscription ? state.slotId : null,
+        idempotencyKey: key,
+      );
       emit(
         state.copyWith(
           addStatus: AddStatus.success,
@@ -299,14 +290,4 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
       emit(state.copyWith(addStatus: AddStatus.failed));
     }
   }
-
-  /// MA-133 FR-6 — `Frequency` itself is deliberately not extended with
-  /// `WEEKLY`/`CUSTOM_DAYS` (MA-131 §6's decision that Cart's `Frequency`
-  /// stays narrow); those schedule types are only reachable from the My
-  /// Subscriptions screen's own create flow, not here.
-  ScheduleType _scheduleTypeFor(Frequency frequency) => switch (frequency) {
-    Frequency.daily => ScheduleType.daily,
-    Frequency.alternateDays => ScheduleType.alternateDays,
-    Frequency.oneTime => throw StateError('One Time is never a subscription frequency'),
-  };
 }
