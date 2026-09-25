@@ -47,3 +47,21 @@ class ItemRemoveConfirmed extends CartEvent {
   @override
   List<Object?> get props => [lineItemId];
 }
+
+/// MA-137 FR-2/FR-5 — re-fetch the cart (and wallet balance) after coming
+/// back from Catalog or Wallet, keeping the current list on screen rather
+/// than flashing the loading skeleton.
+class CartRefreshRequested extends CartEvent {
+  const CartRefreshRequested();
+}
+
+/// MA-137 FR-7 — the Confirm Order button.
+class CheckoutRequested extends CartEvent {
+  const CheckoutRequested();
+}
+
+/// The screen has shown [CartState.checkoutFailure]; clear it so it's
+/// shown exactly once.
+class CheckoutFeedbackConsumed extends CartEvent {
+  const CheckoutFeedbackConsumed();
+}

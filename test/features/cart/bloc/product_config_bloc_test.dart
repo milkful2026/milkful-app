@@ -9,14 +9,12 @@ import 'package:milkful_app/features/cart/models/frequency.dart';
 import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
-import 'package:milkful_app/features/subscriptions/models/schedule.dart';
 
 import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_pricing_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
 import '../../../fakes/fake_registration_repository.dart';
-import '../../../fakes/fake_subscription_repository.dart';
 import '../../../fakes/fake_wallet_balance_repository.dart';
 
 const _product = Product(
@@ -46,7 +44,6 @@ void main() {
     late FakeWalletBalanceRepository walletBalanceRepository;
     late FakeProfileRepository profileRepository;
     late FakeRegistrationRepository registrationRepository;
-    late FakeSubscriptionRepository subscriptionRepository;
 
     setUp(() {
       catalogRepository = FakeCatalogRepository(
@@ -75,7 +72,6 @@ void main() {
           DeliverySlot(id: 'evening-6-8', label: 'Evening 6-8 PM'),
         ],
       );
-      subscriptionRepository = FakeSubscriptionRepository();
     });
 
     ProductConfigBloc build() => ProductConfigBloc(
@@ -86,7 +82,6 @@ void main() {
       walletBalanceRepository: walletBalanceRepository,
       profileRepository: profileRepository,
       registrationRepository: registrationRepository,
-      subscriptionRepository: subscriptionRepository,
     );
 
     blocTest<ProductConfigBloc, ProductConfigState>(
@@ -317,9 +312,9 @@ void main() {
     );
 
     blocTest<ProductConfigBloc, ProductConfigState>(
-      'AddToCartRequested for a subscription frequency calls '
-      'SubscriptionRepository.create (not CartRepository.addItem) with '
-      'the selected slot',
+      'AddToCartRequested for a subscription frequency adds a cart line '
+      'carrying its start date and the selected slot (MA-137 FR-3 — the '
+      'subscription itself starts at Confirm Order)',
       build: build,
       act: (bloc) async {
         bloc.add(const ProductConfigStarted(_product));
@@ -331,20 +326,16 @@ void main() {
       wait: const Duration(milliseconds: 10),
       verify: (bloc) {
         expect(bloc.state.addStatus, AddStatus.success);
-        expect(subscriptionRepository.lastCreateRequest, isNotNull);
-        expect(subscriptionRepository.lastCreateRequest!['productId'], 'cow-milk');
-        expect(subscriptionRepository.lastCreateRequest!['slotId'], 'morning-6-8');
-        expect(
-          (subscriptionRepository.lastCreateRequest!['schedule'] as Schedule).type,
-          ScheduleType.daily,
-        );
-        expect(cartRepository.requests, isEmpty);
+        final request = cartRepository.requests.single;
+        expect(request.productId, 'cow-milk');
+        expect(request.frequency, Frequency.daily);
+        expect(request.slotId, 'morning-6-8');
+        expect(request.startDate, isNotNull);
       },
     );
 
     blocTest<ProductConfigBloc, ProductConfigState>(
-      'a one-time confirm still calls CartRepository.addItem; '
-      'SubscriptionRepository.create is never called',
+      'a one-time confirm adds a cart line with no slot or start date',
       build: build,
       act: (bloc) async {
         bloc.add(const ProductConfigStarted(_product));
@@ -354,8 +345,10 @@ void main() {
       wait: const Duration(milliseconds: 10),
       verify: (bloc) {
         expect(bloc.state.addStatus, AddStatus.success);
-        expect(cartRepository.requests, hasLength(1));
-        expect(subscriptionRepository.lastCreateRequest, isNull);
+        final request = cartRepository.requests.single;
+        expect(request.frequency, Frequency.oneTime);
+        expect(request.slotId, isNull);
+        expect(request.startDate, isNull);
       },
     );
   });

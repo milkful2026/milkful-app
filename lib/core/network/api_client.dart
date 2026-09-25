@@ -11,11 +11,18 @@ class ApiException implements Exception {
     required this.errorCode,
     required this.message,
     this.statusCode,
+    this.details = const {},
   });
 
   final String errorCode;
   final String message;
   final int? statusCode;
+
+  /// Everything else the error envelope's `data` carried besides
+  /// `errorCode`/`message` — the backend spreads an error's details there
+  /// (`shared/handlers/dto.py:error_envelope`), e.g. MA-136 checkout's
+  /// `shortfallPaise` or `lines`. Empty for transport failures.
+  final Map<String, dynamic> details;
 
   @override
   String toString() => 'ApiException($errorCode): $message';
@@ -123,6 +130,9 @@ class ApiClient {
           errorCode: data['errorCode'] as String? ?? 'UNKNOWN_ERROR',
           message: data['message'] as String? ?? 'Something went wrong',
           statusCode: response?.statusCode,
+          details: Map<String, dynamic>.of(data)
+            ..remove('errorCode')
+            ..remove('message'),
         );
       }
     }

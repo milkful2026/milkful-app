@@ -77,6 +77,7 @@ class _FakeCartRepository implements CartRepository {
     required Frequency frequency,
     required String idempotencyKey,
     DateTime? startDate,
+    String? slotId,
   }) async {}
 
   @override

@@ -19,6 +19,7 @@ import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
 import '../../features/wallet/presentation/wallet_transactions_placeholder.dart';
+import '../../features/checkout/presentation/order_success_screen.dart';
 import '../config/app_config.dart';
 
 /// Route list covers both specs' screen flows:
@@ -120,6 +121,17 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       // `/wallet` — no feature flag (unlike `/wallet`'s `walletEnabled`),
       // ships live once merged per MA-133 §4 FR-1's own decision.
       GoRoute(path: '/subscriptions', builder: (context, state) => const SubscriptionsScreen()),
+      // MA-137 FR-10. Reached with `go` from Review Cart once a checkout
+      // completes; a deep link or restored route has no `extra` to show,
+      // so it falls back to Home rather than crashing.
+      GoRoute(
+        path: '/order-success',
+        builder: (context, state) {
+          final args = state.extra;
+          if (args is! OrderSuccessArgs) return const HomeScreen();
+          return OrderSuccessScreen(args: args);
+        },
+      ),
     ],
   );
 }

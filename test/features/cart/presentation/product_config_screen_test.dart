@@ -12,14 +12,12 @@ import 'package:milkful_app/features/cart/presentation/product_config_screen.dar
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
-import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
 
 import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_pricing_repository.dart';
 import '../../../fakes/fake_profile_repository.dart';
 import '../../../fakes/fake_registration_repository.dart';
-import '../../../fakes/fake_subscription_repository.dart';
 import '../../../fakes/fake_wallet_balance_repository.dart';
 
 const _quote = Quote(
@@ -59,7 +57,6 @@ void main() {
   late FakeWalletBalanceRepository walletBalanceRepository;
   late FakeProfileRepository profileRepository;
   late FakeRegistrationRepository registrationRepository;
-  late FakeSubscriptionRepository subscriptionRepository;
   late GoRouter router;
 
   Future<void> pumpProductConfig(WidgetTester tester, Product product) async {
@@ -83,7 +80,6 @@ void main() {
     registrationRepository = FakeRegistrationRepository(
       slots: const [DeliverySlot(id: 'morning-6-8', label: 'Morning 6-8 AM')],
     );
-    subscriptionRepository = FakeSubscriptionRepository();
     router = GoRouter(
       initialLocation: '/',
       routes: [
@@ -105,7 +101,6 @@ void main() {
           ),
           RepositoryProvider<ProfileRepository>.value(value: profileRepository),
           RepositoryProvider<RegistrationRepository>.value(value: registrationRepository),
-          RepositoryProvider<SubscriptionRepository>.value(value: subscriptionRepository),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -128,7 +123,7 @@ void main() {
   );
 
   testWidgets(
-    'Selecting a subscription frequency reveals the calendar and relabels the CTA',
+    'Selecting a subscription frequency reveals the calendar; the CTA still adds to cart',
     (tester) async {
       await pumpProductConfig(tester, _subscriptionProduct);
       expect(find.text('Add to Cart'), findsOneWidget);
@@ -138,7 +133,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('start-date-calendar')), findsOneWidget);
-      expect(find.text('Subscribe Now'), findsOneWidget);
+      // MA-137 FR-3 — a subscription goes into the cart too, so the CTA
+      // keeps its label; the cart icon marks it as a subscription add.
+      expect(find.text('Add to Cart'), findsOneWidget);
+      expect(find.byIcon(Icons.shopping_cart_outlined), findsOneWidget);
     },
   );
 
@@ -170,7 +168,7 @@ void main() {
     },
   );
 
-  testWidgets('Subscribe Now is disabled below the ₹500 wallet threshold', (
+  testWidgets('Adding a subscription is disabled below the ₹500 wallet threshold', (
     tester,
   ) async {
     await pumpProductConfig(tester, _subscriptionProduct);

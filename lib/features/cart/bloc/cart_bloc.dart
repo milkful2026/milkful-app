@@ -2,19 +2,37 @@ import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/id_generator.dart';
+import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
+import '../../checkout/data/checkout_repository.dart';
+import '../../checkout/data/pending_checkout_store.dart';
+import '../../checkout/models/checkout_failure.dart';
+import '../../wallet/data/wallet_repository.dart';
 import '../data/cart_repository.dart';
 import '../models/cart_line_item.dart';
+import '../models/cart_view.dart';
 import 'cart_event.dart';
 import 'cart_state.dart';
 
-/// MA-123's `CartBloc`. Mirrors `ProductConfigBloc`'s shape — one bloc
-/// owning a single screen's several independent async operations.
+/// MA-123's `CartBloc`, extended by MA-137 into the Review Cart screen's
+/// bloc: the cart plus its split pricing, the wallet balance, the saved
+/// delivery address, and Confirm Order. Mirrors `ProductConfigBloc`'s
+/// shape — one bloc owning a single screen's several independent async
+/// operations.
 class CartBloc extends Bloc<CartEvent, CartState> {
-  CartBloc({required this._cartRepository, required this._catalogRepository})
-    : super(const CartState()) {
+  CartBloc({
+    required this._cartRepository,
+    required this._catalogRepository,
+    required this._walletRepository,
+    required this._profileRepository,
+    required this._checkoutRepository,
+    required this._pendingCheckoutStore,
+    this._checkoutRetryDelays = _defaultRetryDelays,
+  }) : super(const CartState()) {
     on<CartStarted>(_onStarted);
+    on<CartRefreshRequested>(_onRefreshRequested, transformer: restartable());
     // `sequential`, not `restartable`: each write is a full round-trip that
     // depends on and advances `cartVersion`, and `PUT /cart` replaces the
     // whole item list. `restartable` cancels an in-flight write when the
@@ -26,37 +44,130 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     on<ItemRemoveRequested>(_onItemRemoveRequested);
     on<ItemRemoveCancelled>(_onItemRemoveCancelled);
     on<ItemRemoveConfirmed>(_onItemRemoveConfirmed, transformer: sequential());
+    // `droppable`: a second tap while one Confirm is running is ignored
+    // outright (the button is disabled too; this is the belt to its braces).
+    on<CheckoutRequested>(_onCheckoutRequested, transformer: droppable());
+    on<CheckoutFeedbackConsumed>(_onFeedbackConsumed);
   }
+
+  /// MA-137 FR-8 — automatic retries of an incomplete checkout, same key.
+  static const _defaultRetryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ];
 
   final CartRepository _cartRepository;
   final CatalogRepository _catalogRepository;
+  final WalletRepository _walletRepository;
+  final ProfileRepository _profileRepository;
+  final CheckoutRepository _checkoutRepository;
+  final PendingCheckoutStore _pendingCheckoutStore;
+  final List<Duration> _checkoutRetryDelays;
 
   Future<void> _onStarted(CartStarted event, Emitter<CartState> emit) async {
     emit(state.copyWith(loadStatus: CartLoadStatus.loading, clearLoadErrorMessage: true));
+    // MA-137 FR-5/FR-6 — balance and profile load alongside the cart; a
+    // failure in either only hides its own row.
+    await Future.wait([_loadCart(emit), _loadWallet(emit), _loadProfile(emit)]);
+  }
+
+  Future<void> _onRefreshRequested(
+    CartRefreshRequested event,
+    Emitter<CartState> emit,
+  ) async {
+    await Future.wait([_loadCart(emit, keepContent: true), _loadWallet(emit)]);
+  }
+
+  Future<void> _loadCart(Emitter<CartState> emit, {bool keepContent = false}) async {
     try {
       final view = await _cartRepository.getCart();
       final items = await _resolveProducts(view.items);
-      emit(
-        state.copyWith(
-          loadStatus: CartLoadStatus.loaded,
-          items: items,
-          cartVersion: view.cartVersion,
-          quote: view.quote,
-          clearQuote: view.quote == null,
-        ),
-      );
+      if (emit.isDone) return;
+      emit(_withCart(state, view, items).copyWith(loadStatus: CartLoadStatus.loaded));
     } on ApiException catch (e) {
-      emit(state.copyWith(loadStatus: CartLoadStatus.failed, loadErrorMessage: e.message));
+      if (emit.isDone) return;
+      if (keepContent && state.loadStatus == CartLoadStatus.loaded) {
+        emit(state.copyWith(writeErrorMessage: e.message));
+      } else {
+        emit(state.copyWith(loadStatus: CartLoadStatus.failed, loadErrorMessage: e.message));
+      }
     } catch (_) {
-      emit(state.copyWith(loadStatus: CartLoadStatus.failed));
+      if (emit.isDone) return;
+      if (keepContent && state.loadStatus == CartLoadStatus.loaded) {
+        emit(state.copyWith(writeErrorMessage: 'Something went wrong'));
+      } else {
+        emit(state.copyWith(loadStatus: CartLoadStatus.failed));
+      }
     }
   }
+
+  Future<void> _loadWallet(Emitter<CartState> emit) async {
+    try {
+      final wallet = await _walletRepository.getWallet();
+      if (emit.isDone) return;
+      emit(
+        state.copyWith(
+          walletStatus: SideLoadStatus.loaded,
+          walletBalancePaise: wallet.balancePaise,
+        ),
+      );
+    } catch (_) {
+      if (emit.isDone) return;
+      emit(state.copyWith(walletStatus: SideLoadStatus.failed));
+    }
+  }
+
+  /// MA-137 FR-6/FR-9 — the saved address for the delivery card, and the
+  /// user id that scopes a persisted checkout key. `AuthBloc` doesn't hold
+  /// the profile, so this reads it directly, as `ProductConfigBloc` does.
+  Future<void> _loadProfile(Emitter<CartState> emit) async {
+    try {
+      final profile = await _profileRepository.getMe();
+      final pendingKey = await _pendingCheckoutStore.read(profile.userId);
+      if (emit.isDone) return;
+      emit(
+        state.copyWith(
+          addressStatus: SideLoadStatus.loaded,
+          deliveryAddress: profile.defaultAddress,
+          clearDeliveryAddress: profile.defaultAddress == null,
+          userId: profile.userId,
+          pendingCheckoutKey: pendingKey,
+          // A Confirm from a previous session never reached an outcome —
+          // show the "finishing your order" banner; the next tap resumes it.
+          checkoutStatus: pendingKey != null ? CheckoutStatus.incomplete : null,
+        ),
+      );
+    } catch (_) {
+      if (emit.isDone) return;
+      emit(state.copyWith(addressStatus: SideLoadStatus.failed));
+    }
+  }
+
+  CartState _withCart(CartState base, CartView view, List<CartLineItemView> items) =>
+      base.copyWith(
+        items: items,
+        cartVersion: view.cartVersion,
+        quote: view.quote,
+        clearQuote: view.quote == null,
+        payNowQuote: view.payNowQuote,
+        clearPayNowQuote: view.payNowQuote == null,
+        perDeliveryQuote: view.perDeliveryQuote,
+        clearPerDeliveryQuote: view.perDeliveryQuote == null,
+      );
 
   /// MA-123 FR-2 — parallel, not sequential; a single failed lookup
   /// degrades only that row (`product: null`), not the whole screen.
   Future<List<CartLineItemView>> _resolveProducts(List<CartLineItem> lineItems) {
+    final known = <String, Product?>{
+      for (final view in state.items)
+        if (view.product != null) view.lineItem.productId: view.product,
+    };
     return Future.wait(
       lineItems.map((li) async {
+        if (known.containsKey(li.productId)) {
+          return CartLineItemView(lineItem: li, product: known[li.productId]);
+        }
         try {
           final product = await _catalogRepository.getProduct(li.productId);
           return CartLineItemView(lineItem: li, product: product);
@@ -94,17 +205,27 @@ class CartBloc extends Bloc<CartEvent, CartState> {
               : v,
         )
         .toList();
-    emit(state.copyWith(items: optimisticItems, clearWriteErrorMessage: true));
-
-    await _writeQuantity(
-      lineItemId: event.lineItemId,
-      quantity: event.quantity,
-      items: optimisticItems,
-      revertItems: originalItems,
-      revertVersion: state.cartVersion,
-      emit: emit,
-      retried: false,
+    emit(
+      state.copyWith(
+        items: optimisticItems,
+        clearWriteErrorMessage: true,
+        writesInFlight: state.writesInFlight + 1,
+      ),
     );
+
+    try {
+      await _writeQuantity(
+        lineItemId: event.lineItemId,
+        quantity: event.quantity,
+        items: optimisticItems,
+        revertItems: originalItems,
+        revertVersion: state.cartVersion,
+        emit: emit,
+        retried: false,
+      );
+    } finally {
+      emit(state.copyWith(writesInFlight: state.writesInFlight - 1));
+    }
   }
 
   /// MA-123 FR-6 — a stale `cartVersion` (409) silently refetches and
@@ -132,14 +253,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         ifVersion: state.cartVersion,
       );
       final fresh = await _cartRepository.getCart();
-      emit(
-        state.copyWith(
-          items: _pairWithKnownProducts(fresh.items),
-          cartVersion: fresh.cartVersion,
-          quote: fresh.quote,
-          clearQuote: fresh.quote == null,
-        ),
-      );
+      emit(_withCart(state, fresh, _pairWithKnownProducts(fresh.items)));
     } on ApiException catch (e) {
       if (e.statusCode == 409 && !retried) {
         final fresh = await _cartRepository.getCart();
@@ -197,11 +311,14 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     final remainingItems = state.items
         .where((v) => v.lineItem.id != event.lineItemId)
         .toList();
+    final remainingErrors = Map<String, String>.of(state.lineErrors)..remove(event.lineItemId);
     emit(
       state.copyWith(
         items: remainingItems,
         clearPendingRemovalId: true,
         clearWriteErrorMessage: true,
+        writesInFlight: state.writesInFlight + 1,
+        lineErrors: remainingErrors,
       ),
     );
 
@@ -210,22 +327,97 @@ class CartBloc extends Bloc<CartEvent, CartState> {
       // MA-123 FR-5 — removing the last item skips the extra GET /cart
       // round-trip; the empty state is already fully known locally.
       if (remainingItems.isEmpty) {
-        emit(state.copyWith(quote: null, clearQuote: true));
+        emit(
+          state.copyWith(
+            clearQuote: true,
+            clearPayNowQuote: true,
+            clearPerDeliveryQuote: true,
+          ),
+        );
         return;
       }
       final fresh = await _cartRepository.getCart();
-      emit(
-        state.copyWith(
-          items: _pairWithKnownProducts(fresh.items),
-          cartVersion: fresh.cartVersion,
-          quote: fresh.quote,
-          clearQuote: fresh.quote == null,
-        ),
-      );
+      emit(_withCart(state, fresh, _pairWithKnownProducts(fresh.items)));
     } on ApiException catch (e) {
       emit(state.copyWith(items: originalItems, writeErrorMessage: e.message));
     } catch (_) {
       emit(state.copyWith(items: originalItems, writeErrorMessage: 'Something went wrong'));
+    } finally {
+      emit(state.copyWith(writesInFlight: state.writesInFlight - 1));
     }
+  }
+
+  /// MA-137 FR-7..FR-9 — one Confirm Order. The Idempotency-Key is minted
+  /// once, persisted before the first request, and reused for every retry
+  /// until the checkout reaches a final outcome, so the server resumes
+  /// rather than repeats it (MA-136 FR-2) — even across an app kill.
+  Future<void> _onCheckoutRequested(
+    CheckoutRequested event,
+    Emitter<CartState> emit,
+  ) async {
+    if (!state.canConfirm) return;
+    final key = state.pendingCheckoutKey ?? newHexId();
+    final userId = state.userId;
+    if (userId != null) await _pendingCheckoutStore.write(userId, key);
+    emit(
+      state.copyWith(
+        checkoutStatus: CheckoutStatus.submitting,
+        pendingCheckoutKey: key,
+        clearCheckoutFailure: true,
+        lineErrors: const {},
+      ),
+    );
+
+    for (var attempt = 0; ; attempt++) {
+      CheckoutFailure failure;
+      try {
+        final result = await _checkoutRepository.checkout(
+          cartVersion: state.cartVersion,
+          expectedPayNowPaise: state.payNowPaise,
+          idempotencyKey: key,
+        );
+        if (userId != null) await _pendingCheckoutStore.clear(userId);
+        emit(
+          state.copyWith(
+            checkoutStatus: CheckoutStatus.idle,
+            clearPendingCheckoutKey: true,
+            checkoutResult: result,
+          ),
+        );
+        return;
+      } on ApiException catch (e) {
+        failure = CheckoutFailure.fromApiException(e);
+      } catch (_) {
+        failure = const Incomplete();
+      }
+
+      if (!failure.clearsKey) {
+        if (attempt < _checkoutRetryDelays.length) {
+          await Future<void>.delayed(_checkoutRetryDelays[attempt]);
+          if (emit.isDone) return;
+          continue;
+        }
+        emit(state.copyWith(checkoutStatus: CheckoutStatus.incomplete, checkoutFailure: failure));
+        return;
+      }
+
+      if (userId != null) await _pendingCheckoutStore.clear(userId);
+      emit(
+        state.copyWith(
+          checkoutStatus: CheckoutStatus.idle,
+          clearPendingCheckoutKey: true,
+          checkoutFailure: failure,
+          lineErrors: failure is LineInvalid ? failure.reasonsByLineId : const {},
+        ),
+      );
+      if (failure is CartChanged || failure is PriceChanged || failure is LineInvalid) {
+        add(const CartRefreshRequested());
+      }
+      return;
+    }
+  }
+
+  void _onFeedbackConsumed(CheckoutFeedbackConsumed event, Emitter<CartState> emit) {
+    emit(state.copyWith(clearCheckoutFailure: true));
   }
 }

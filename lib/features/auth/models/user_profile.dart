@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'delivery_address.dart';
+
 /// Mirrors user/src/handlers/dto.py's serialize_user_profile output.
 class UserProfile extends Equatable {
   const UserProfile({
@@ -10,6 +12,7 @@ class UserProfile extends Equatable {
     required this.defaultAddressId,
     this.defaultAddressState,
     this.defaultAddressZoneId,
+    this.defaultAddress,
   });
 
   final String userId;
@@ -29,6 +32,11 @@ class UserProfile extends Equatable {
   /// draft (see product_config_bloc.dart's own comment on why).
   final String? defaultAddressZoneId;
 
+  /// MA-135 FR-6 — the full default address (null when none is set, or
+  /// from a User Service that predates the field). The Review Cart
+  /// screen's delivery card reads this (MA-137 FR-6).
+  final DeliveryAddress? defaultAddress;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
     userId: json['userId'] as String,
     name: json['name'] as String,
@@ -37,6 +45,9 @@ class UserProfile extends Equatable {
     defaultAddressId: json['defaultAddressId'] as String?,
     defaultAddressState: json['defaultAddressState'] as String?,
     defaultAddressZoneId: json['defaultAddressZoneId'] as String?,
+    defaultAddress: json['defaultAddress'] is Map<String, dynamic>
+        ? DeliveryAddress.fromJson(json['defaultAddress'] as Map<String, dynamic>)
+        : null,
   );
 
   @override
@@ -48,5 +59,6 @@ class UserProfile extends Equatable {
     defaultAddressId,
     defaultAddressState,
     defaultAddressZoneId,
+    defaultAddress,
   ];
 }

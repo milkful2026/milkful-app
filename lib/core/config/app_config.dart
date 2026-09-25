@@ -94,9 +94,8 @@ class AppConfig {
       ? _subscriptionBaseUrlOverride
       : _localDefault(8008);
 
-  /// Order Service (MA-132, `services/order`) — not called directly by any
-  /// screen yet (MA-133 §8); added now since a future order-status
-  /// affordance will need it.
+  /// Order Service (MA-132, `services/order`) — the Review Cart screen's
+  /// Confirm Order calls its `POST /orders/checkout` (MA-136/MA-137).
   static const _orderBaseUrlOverride = String.fromEnvironment('ORDER_BASE_URL');
   static String get orderBaseUrl =>
       _orderBaseUrlOverride.isNotEmpty ? _orderBaseUrlOverride : _localDefault(8009);

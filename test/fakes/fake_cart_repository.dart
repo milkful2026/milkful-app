@@ -10,6 +10,7 @@ class FakeAddItemRequest {
     required this.frequency,
     required this.idempotencyKey,
     required this.startDate,
+    this.slotId,
   });
 
   final String productId;
@@ -17,6 +18,7 @@ class FakeAddItemRequest {
   final Frequency frequency;
   final String idempotencyKey;
   final DateTime? startDate;
+  final String? slotId;
 }
 
 class FakeUpdateItemRequest {
@@ -62,6 +64,7 @@ class FakeCartRepository implements CartRepository {
     required Frequency frequency,
     required String idempotencyKey,
     DateTime? startDate,
+    String? slotId,
   }) async {
     requests.add(
       FakeAddItemRequest(
@@ -70,6 +73,7 @@ class FakeCartRepository implements CartRepository {
         frequency: frequency,
         idempotencyKey: idempotencyKey,
         startDate: startDate,
+        slotId: slotId,
       ),
     );
     if (addItemException != null) throw addItemException!;

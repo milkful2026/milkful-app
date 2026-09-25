@@ -14,6 +14,8 @@ import 'features/auth/data/profile_repository.dart';
 import 'features/cart/data/cart_repository.dart';
 import 'features/cart/data/pricing_repository.dart';
 import 'features/catalog/data/catalog_repository.dart';
+import 'features/checkout/data/checkout_repository.dart';
+import 'features/checkout/data/pending_checkout_store.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
 import 'features/onboarding/data/places_repository.dart';
 import 'features/onboarding/data/registration_repository.dart';
@@ -61,6 +63,11 @@ class MilkfulApp extends StatelessWidget {
     // (create/edit).
     final subscriptionRepository = DioSubscriptionRepository(apiClient);
     final pendingRechargeStore = SharedPreferencesPendingRechargeStore();
+    // MA-136/MA-137 — Review Cart's Confirm Order (Order Service's
+    // POST /orders/checkout) and the per-user key that lets a retried or
+    // interrupted Confirm resume instead of repeating.
+    final checkoutRepository = DioCheckoutRepository(apiClient);
+    final pendingCheckoutStore = SharedPreferencesPendingCheckoutStore();
     final paymentMethodStore = SharedPreferencesPaymentMethodStore();
     // A fresh SDK instance shared across every Wallet screen visit for the
     // app's lifetime — `WalletBloc.close()` calls `.dispose()` (Razorpay's
@@ -99,6 +106,8 @@ class MilkfulApp extends StatelessWidget {
         RepositoryProvider<PendingRechargeStore>.value(value: pendingRechargeStore),
         RepositoryProvider<PaymentMethodStore>.value(value: paymentMethodStore),
         RepositoryProvider<RazorpayCheckout>.value(value: razorpayCheckout),
+        RepositoryProvider<CheckoutRepository>.value(value: checkoutRepository),
+        RepositoryProvider<PendingCheckoutStore>.value(value: pendingCheckoutStore),
       ],
       child: MultiBlocProvider(
         providers: [
