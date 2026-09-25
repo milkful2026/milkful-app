@@ -52,8 +52,12 @@ flutter run --device-id=<your-emulator-id> \
   --dart-define=WALLET_BASE_URL=http://10.0.2.2:8006 \
   --dart-define=PAYMENT_BASE_URL=http://10.0.2.2:8007 \
   --dart-define=SUBSCRIPTION_BASE_URL=http://10.0.2.2:8008 \
-  --dart-define=ORDER_BASE_URL=http://10.0.2.2:8009
+  --dart-define=ORDER_BASE_URL=http://10.0.2.2:8009 \
+  --dart-define=WALLET_ENABLED=true
 ```
+
+`WALLET_ENABLED` defaults to `false`, which shows "Wallet is coming soon" at `/wallet` instead of
+the real Wallet screen — set it whenever Wallet/Payment are reachable, as they are on the local stack.
 
 A missed service here doesn't fail loudly — that screen just gets a generic "Connection refused"
 the first time it makes a call, since the value silently falls back to `app_config.dart`'s

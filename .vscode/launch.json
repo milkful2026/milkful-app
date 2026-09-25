@@ -41,7 +41,10 @@
         "--dart-define=WALLET_BASE_URL=http://10.0.2.2:8006",
         "--dart-define=PAYMENT_BASE_URL=http://10.0.2.2:8007",
         "--dart-define=SUBSCRIPTION_BASE_URL=http://10.0.2.2:8008",
-        "--dart-define=ORDER_BASE_URL=http://10.0.2.2:8009"
+        "--dart-define=ORDER_BASE_URL=http://10.0.2.2:8009",
+        // Wallet/Payment are reachable on the local stack, so un-dark-ship
+        // the Wallet tab (see AppConfig.walletEnabled).
+        "--dart-define=WALLET_ENABLED=true"
       ]
     }
   ]
