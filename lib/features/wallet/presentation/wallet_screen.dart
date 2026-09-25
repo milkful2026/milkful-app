@@ -211,6 +211,7 @@ class _WalletBody extends StatelessWidget {
       case WalletLoadStatus.loaded:
         final wallet = state.wallet!;
         final controlsEnabled = state.pendingRecharge == null;
+        final canRecharge = wallet.status == WalletStatus.active && controlsEnabled;
         return RefreshIndicator(
           onRefresh: () async => context.read<WalletBloc>().add(const WalletRefreshRequested()),
           child: ListView(
@@ -219,7 +220,7 @@ class _WalletBody extends StatelessWidget {
               _BalanceCard(
                 wallet: wallet,
                 provisionRetryStatus: state.provisionRetryStatus,
-                onTopUp: controlsEnabled ? () => onOpenTopUpSheet(context, state) : null,
+                onTopUp: canRecharge ? () => onOpenTopUpSheet(context, state) : null,
                 onPassbook: () => context.push('/wallet/transactions'),
                 onRetrySetup: () => context.read<WalletBloc>().add(const WalletProvisionRetryRequested()),
               ),
@@ -236,7 +237,7 @@ class _WalletBody extends StatelessWidget {
               const SizedBox(height: 20),
               _QuickTopUp(
                 selectedAmountPaise: state.selectedAmountPaise,
-                enabled: wallet.status == WalletStatus.active && controlsEnabled,
+                enabled: canRecharge,
                 minPaise: wallet.rechargeMinPaise,
                 maxPaise: wallet.rechargeMaxPaise,
                 onSelect: (amount) => context.read<WalletBloc>().add(QuickAmountSelected(amount)),
@@ -244,7 +245,7 @@ class _WalletBody extends StatelessWidget {
               const SizedBox(height: 20),
               _PaymentMethods(
                 selected: state.selectedMethod,
-                enabled: wallet.status == WalletStatus.active && controlsEnabled,
+                enabled: canRecharge,
                 onSelect: (method) => context.read<WalletBloc>().add(PaymentMethodSelected(method)),
               ),
             ],
@@ -366,6 +367,7 @@ class _BalanceCard extends StatelessWidget {
               if (wallet.status == WalletStatus.failed)
                 FilledButton.tonal(
                   key: const Key('wallet-retry-setup'),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                   onPressed: provisionRetryStatus == ProvisionRetryStatus.loading ? null : onRetrySetup,
                   child: provisionRetryStatus == ProvisionRetryStatus.loading
                       ? const SizedBox(
@@ -376,8 +378,13 @@ class _BalanceCard extends StatelessWidget {
                       : const Text('Retry setup'),
                 )
               else
+                // The app-wide FilledButton theme's Size.fromHeight(48) is
+                // infinite-width; unbounded inside this Row it crashes
+                // layout and blanks the whole wallet body (same override as
+                // product_config_screen.dart's Add to Cart button).
                 FilledButton.icon(
                   key: const Key('wallet-topup-button'),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                   onPressed: onTopUp,
                   icon: const Icon(Icons.add),
                   label: const Text('Top Up'),

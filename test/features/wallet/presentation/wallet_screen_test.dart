@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:milkful_app/core/network/api_client.dart';
+import 'package:milkful_app/core/theme/app_theme.dart';
 import 'package:milkful_app/features/onboarding/bloc/registration_bloc.dart';
 import 'package:milkful_app/features/wallet/data/pending_recharge_store.dart';
 import 'package:milkful_app/features/wallet/data/razorpay_checkout.dart';
@@ -72,7 +73,9 @@ void main() {
             repository: FakeRegistrationRepository(),
             draftStorage: FakeDraftStorage(),
           ),
-          child: MaterialApp.router(routerConfig: router),
+          // The real theme: its infinite-width FilledButton minimumSize is
+          // what blanked this screen on device (a Row-hosted Top Up button).
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
         ),
       ),
     );
@@ -190,6 +193,10 @@ void main() {
       find.byKey(const Key('wallet-proceed-to-payment')),
     );
     expect(proceedButton.onPressed, isNull);
+    // Top Up must be off too — otherwise its sheet lets you pick an amount
+    // that highlights a chip while Proceed stays disabled.
+    final topUpButton = tester.widget<FilledButton>(find.byKey(const Key('wallet-topup-button')));
+    expect(topUpButton.onPressed, isNull);
   });
 
   testWidgets(
