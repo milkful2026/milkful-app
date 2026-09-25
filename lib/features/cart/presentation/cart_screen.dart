@@ -5,6 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/storage/secure_token_storage.dart';
+import '../../../core/utils/jwt_claims.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../auth/models/delivery_address.dart';
 import '../../catalog/data/catalog_repository.dart';
@@ -37,11 +39,17 @@ class CartScreen extends StatelessWidget {
         profileRepository: context.read<ProfileRepository>(),
         checkoutRepository: context.read<CheckoutRepository>(),
         pendingCheckoutStore: context.read<PendingCheckoutStore>(),
+        currentUserId: _currentUserIdFrom(context.read<SecureTokenStorage>()),
       )..add(const CartStarted()),
       child: const _CartView(),
     );
   }
 }
+
+/// MA-137 FR-9 — the pending checkout is scoped by the token's `sub`, read
+/// locally so it never waits on (or fails with) `GET /users/me`.
+CurrentUserIdReader _currentUserIdFrom(SecureTokenStorage tokenStorage) =>
+    () async => subFromJwt(await tokenStorage.readAccessToken());
 
 class _CartView extends StatefulWidget {
   const _CartView();
@@ -77,7 +85,11 @@ class _CartViewState extends State<_CartView> {
     // the timer fires this row's element may have been scrolled off and
     // deactivated, making its `context` unsafe to look up a provider from.
     final bloc = context.read<CartBloc>();
+    if (bloc.state.isCartLocked) return;
     setState(() => _localQuantities[lineItemId] = next);
+    // Tell the bloc now, not when the timer fires, so Confirm Order is
+    // disabled for the whole wait and can't charge the old quantity.
+    bloc.add(QuantityEditStarted(lineItemId: lineItemId));
     _debounceTimers[lineItemId]?.cancel();
     _debounceTimers[lineItemId] = Timer(const Duration(milliseconds: 500), () {
       _debounceTimers.remove(lineItemId);
@@ -282,7 +294,7 @@ class _CartViewState extends State<_CartView> {
             return _EmptyCart(onBrowse: () => _pushThenRefresh(context, '/catalog'));
           }
 
-          final locked = state.checkoutStatus == CheckoutStatus.submitting;
+          final locked = state.isCartLocked;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -626,6 +638,7 @@ class _CartSummaryBar extends StatelessWidget {
     final payNow = state.effectivePayNowQuote;
     final perDelivery = state.perDeliveryQuote;
     final submitting = state.checkoutStatus == CheckoutStatus.submitting;
+    final resuming = state.pendingCheckout != null;
     final shortfall = state.shortfallPaise;
 
     return Container(
@@ -678,7 +691,7 @@ class _CartSummaryBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      "We're finishing your order. Tap Confirm Order to try again.",
+                      "We're finishing your order. Tap Finish placing order to try again.",
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSecondaryContainer,
                       ),
@@ -706,7 +719,7 @@ class _CartSummaryBar extends StatelessWidget {
                               color: theme.colorScheme.onPrimary,
                             ),
                           )
-                        : const Text('Confirm Order'),
+                        : Text(resuming ? 'Finish placing order' : 'Confirm Order'),
                   ),
                 ),
               ],

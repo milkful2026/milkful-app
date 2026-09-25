@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../auth/models/delivery_address.dart';
 import '../../catalog/models/product.dart';
+import '../../checkout/data/pending_checkout_store.dart';
 import '../../checkout/models/checkout_failure.dart';
 import '../../checkout/models/checkout_result.dart';
 import '../models/cart_line_item.dart';
@@ -17,7 +18,8 @@ enum CartLoadStatus { loading, loaded, failed }
 enum SideLoadStatus { loading, loaded, failed }
 
 /// MA-137 FR-7/FR-8. `incomplete` means a Confirm may still be finishing
-/// server-side — the persisted key is kept and the next Confirm resumes it.
+/// server-side — the persisted checkout is kept and the next Confirm
+/// resumes it.
 enum CheckoutStatus { idle, submitting, incomplete }
 
 /// Pairs a cart line item with its resolved [Product] — `null` product
@@ -48,13 +50,14 @@ class CartState extends Equatable {
     this.pendingRemovalId,
     this.writeErrorMessage,
     this.writesInFlight = 0,
+    this.unsentQuantityEdits = const {},
     this.walletStatus = SideLoadStatus.loading,
     this.walletBalancePaise,
     this.addressStatus = SideLoadStatus.loading,
     this.deliveryAddress,
     this.userId,
     this.checkoutStatus = CheckoutStatus.idle,
-    this.pendingCheckoutKey,
+    this.pendingCheckout,
     this.checkoutFailure,
     this.lineErrors = const {},
     this.checkoutResult,
@@ -84,6 +87,12 @@ class CartState extends Equatable {
   /// them so it always checks out the cartVersion the customer sees.
   final int writesInFlight;
 
+  /// Line ids whose quantity the customer changed but whose write the
+  /// screen hasn't sent yet (it waits 500 ms, MA-123 FR-4). Confirm waits
+  /// for them too, or it would charge the old quantity the screen no
+  /// longer shows.
+  final Set<String> unsentQuantityEdits;
+
   final SideLoadStatus walletStatus;
   final int? walletBalancePaise;
 
@@ -92,13 +101,17 @@ class CartState extends Equatable {
   final SideLoadStatus addressStatus;
   final DeliveryAddress? deliveryAddress;
 
-  /// From `GET /users/me` — scopes the persisted checkout key (FR-9).
+  /// The Cognito `sub` from the stored access token — scopes the persisted
+  /// checkout (MA-137 FR-9). Read locally, never from `GET /users/me`, so a
+  /// failed profile load can't lose a pending checkout. `null` until read,
+  /// or when signed out; Confirm stays disabled while it's `null`.
   final String? userId;
 
   final CheckoutStatus checkoutStatus;
 
-  /// The Idempotency-Key of the Confirm in flight or left incomplete.
-  final String? pendingCheckoutKey;
+  /// The Confirm in flight or left incomplete (key + the body it was sent
+  /// with). While set, the cart is locked (FR-9).
+  final PendingCheckout? pendingCheckout;
 
   /// Transient — shown once (dialog/SnackBar/banner) and then consumed.
   final CheckoutFailure? checkoutFailure;
@@ -138,10 +151,18 @@ class CartState extends Equatable {
       ? null
       : math.max(0, requiredPaise - walletBalancePaise!);
 
+  /// MA-137 FR-9 — no edits while a checkout is pending: the next Confirm
+  /// resends the saved key and body, and the server finishes that checkout
+  /// whatever the cart looks like now.
+  bool get isCartLocked =>
+      pendingCheckout != null || checkoutStatus == CheckoutStatus.submitting;
+
   bool get canConfirm =>
       loadStatus == CartLoadStatus.loaded &&
       items.isNotEmpty &&
+      userId != null &&
       writesInFlight == 0 &&
+      unsentQuantityEdits.isEmpty &&
       checkoutStatus != CheckoutStatus.submitting;
 
   CartState copyWith({
@@ -161,6 +182,7 @@ class CartState extends Equatable {
     String? writeErrorMessage,
     bool clearWriteErrorMessage = false,
     int? writesInFlight,
+    Set<String>? unsentQuantityEdits,
     SideLoadStatus? walletStatus,
     int? walletBalancePaise,
     SideLoadStatus? addressStatus,
@@ -168,8 +190,8 @@ class CartState extends Equatable {
     bool clearDeliveryAddress = false,
     String? userId,
     CheckoutStatus? checkoutStatus,
-    String? pendingCheckoutKey,
-    bool clearPendingCheckoutKey = false,
+    PendingCheckout? pendingCheckout,
+    bool clearPendingCheckout = false,
     CheckoutFailure? checkoutFailure,
     bool clearCheckoutFailure = false,
     Map<String, String>? lineErrors,
@@ -185,15 +207,14 @@ class CartState extends Equatable {
     pendingRemovalId: clearPendingRemovalId ? null : (pendingRemovalId ?? this.pendingRemovalId),
     writeErrorMessage: clearWriteErrorMessage ? null : (writeErrorMessage ?? this.writeErrorMessage),
     writesInFlight: writesInFlight ?? this.writesInFlight,
+    unsentQuantityEdits: unsentQuantityEdits ?? this.unsentQuantityEdits,
     walletStatus: walletStatus ?? this.walletStatus,
     walletBalancePaise: walletBalancePaise ?? this.walletBalancePaise,
     addressStatus: addressStatus ?? this.addressStatus,
     deliveryAddress: clearDeliveryAddress ? null : (deliveryAddress ?? this.deliveryAddress),
     userId: userId ?? this.userId,
     checkoutStatus: checkoutStatus ?? this.checkoutStatus,
-    pendingCheckoutKey: clearPendingCheckoutKey
-        ? null
-        : (pendingCheckoutKey ?? this.pendingCheckoutKey),
+    pendingCheckout: clearPendingCheckout ? null : (pendingCheckout ?? this.pendingCheckout),
     checkoutFailure: clearCheckoutFailure ? null : (checkoutFailure ?? this.checkoutFailure),
     lineErrors: lineErrors ?? this.lineErrors,
     checkoutResult: checkoutResult ?? this.checkoutResult,
@@ -211,13 +232,14 @@ class CartState extends Equatable {
     pendingRemovalId,
     writeErrorMessage,
     writesInFlight,
+    unsentQuantityEdits,
     walletStatus,
     walletBalancePaise,
     addressStatus,
     deliveryAddress,
     userId,
     checkoutStatus,
-    pendingCheckoutKey,
+    pendingCheckout,
     checkoutFailure,
     lineErrors,
     checkoutResult,

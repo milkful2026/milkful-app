@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/id_generator.dart';
+import '../../../core/utils/jwt_claims.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
@@ -29,10 +30,12 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     required this._profileRepository,
     required this._checkoutRepository,
     required this._pendingCheckoutStore,
+    required this._currentUserId,
     this._checkoutRetryDelays = _defaultRetryDelays,
   }) : super(const CartState()) {
     on<CartStarted>(_onStarted);
     on<CartRefreshRequested>(_onRefreshRequested, transformer: restartable());
+    on<QuantityEditStarted>(_onQuantityEditStarted);
     // `sequential`, not `restartable`: each write is a full round-trip that
     // depends on and advances `cartVersion`, and `PUT /cart` replaces the
     // whole item list. `restartable` cancels an in-flight write when the
@@ -63,13 +66,19 @@ class CartBloc extends Bloc<CartEvent, CartState> {
   final ProfileRepository _profileRepository;
   final CheckoutRepository _checkoutRepository;
   final PendingCheckoutStore _pendingCheckoutStore;
+  final CurrentUserIdReader _currentUserId;
   final List<Duration> _checkoutRetryDelays;
 
   Future<void> _onStarted(CartStarted event, Emitter<CartState> emit) async {
     emit(state.copyWith(loadStatus: CartLoadStatus.loading, clearLoadErrorMessage: true));
     // MA-137 FR-5/FR-6 — balance and profile load alongside the cart; a
     // failure in either only hides its own row.
-    await Future.wait([_loadCart(emit), _loadWallet(emit), _loadProfile(emit)]);
+    await Future.wait([
+      _loadCart(emit),
+      _loadWallet(emit),
+      _loadProfile(emit),
+      _loadPendingCheckout(emit),
+    ]);
   }
 
   Future<void> _onRefreshRequested(
@@ -118,30 +127,48 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     }
   }
 
-  /// MA-137 FR-6/FR-9 — the saved address for the delivery card, and the
-  /// user id that scopes a persisted checkout key. `AuthBloc` doesn't hold
-  /// the profile, so this reads it directly, as `ProductConfigBloc` does.
+  /// MA-137 FR-6 — the saved address for the delivery card. `AuthBloc`
+  /// doesn't hold the profile, so this reads it directly, as
+  /// `ProductConfigBloc` does. Checkout never depends on it (FR-9).
   Future<void> _loadProfile(Emitter<CartState> emit) async {
     try {
       final profile = await _profileRepository.getMe();
-      final pendingKey = await _pendingCheckoutStore.read(profile.userId);
       if (emit.isDone) return;
       emit(
         state.copyWith(
           addressStatus: SideLoadStatus.loaded,
           deliveryAddress: profile.defaultAddress,
           clearDeliveryAddress: profile.defaultAddress == null,
-          userId: profile.userId,
-          pendingCheckoutKey: pendingKey,
-          // A Confirm from a previous session never reached an outcome —
-          // show the "finishing your order" banner; the next tap resumes it.
-          checkoutStatus: pendingKey != null ? CheckoutStatus.incomplete : null,
         ),
       );
     } catch (_) {
       if (emit.isDone) return;
       emit(state.copyWith(addressStatus: SideLoadStatus.failed));
     }
+  }
+
+  /// MA-137 FR-9 — the user id (token `sub`, no network) and any checkout
+  /// a previous session left without a final outcome. Confirm is disabled
+  /// until this has run, so it can never race a submit.
+  Future<void> _loadPendingCheckout(Emitter<CartState> emit) async {
+    final String? userId;
+    try {
+      userId = await _currentUserId();
+    } catch (_) {
+      return;
+    }
+    if (userId == null) return;
+    final pending = await _pendingCheckoutStore.read(userId);
+    if (emit.isDone || state.checkoutStatus == CheckoutStatus.submitting) return;
+    emit(
+      state.copyWith(
+        userId: userId,
+        pendingCheckout: pending,
+        // Never reached an outcome: show the "finishing your order" banner
+        // and lock the cart; the next tap resumes it.
+        checkoutStatus: pending != null ? CheckoutStatus.incomplete : null,
+      ),
+    );
   }
 
   CartState _withCart(CartState base, CartView view, List<CartLineItemView> items) =>
@@ -190,10 +217,20 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         .toList();
   }
 
+  void _onQuantityEditStarted(QuantityEditStarted event, Emitter<CartState> emit) {
+    if (state.isCartLocked) return;
+    emit(state.copyWith(unsentQuantityEdits: {...state.unsentQuantityEdits, event.lineItemId}));
+  }
+
   Future<void> _onQuantityWriteRequested(
     QuantityWriteRequested event,
     Emitter<CartState> emit,
   ) async {
+    final unsent = {...state.unsentQuantityEdits}..remove(event.lineItemId);
+    if (unsent.length != state.unsentQuantityEdits.length) {
+      emit(state.copyWith(unsentQuantityEdits: unsent));
+    }
+    if (state.isCartLocked) return;
     final targetExists = state.items.any((v) => v.lineItem.id == event.lineItemId);
     if (!targetExists) return;
 
@@ -296,6 +333,7 @@ class CartBloc extends Bloc<CartEvent, CartState> {
   }
 
   void _onItemRemoveRequested(ItemRemoveRequested event, Emitter<CartState> emit) {
+    if (state.isCartLocked) return;
     emit(state.copyWith(pendingRemovalId: event.lineItemId));
   }
 
@@ -307,6 +345,10 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     ItemRemoveConfirmed event,
     Emitter<CartState> emit,
   ) async {
+    if (state.isCartLocked) {
+      emit(state.copyWith(clearPendingRemovalId: true));
+      return;
+    }
     final originalItems = state.items;
     final remainingItems = state.items
         .where((v) => v.lineItem.id != event.lineItemId)
@@ -347,22 +389,40 @@ class CartBloc extends Bloc<CartEvent, CartState> {
     }
   }
 
-  /// MA-137 FR-7..FR-9 — one Confirm Order. The Idempotency-Key is minted
-  /// once, persisted before the first request, and reused for every retry
-  /// until the checkout reaches a final outcome, so the server resumes
-  /// rather than repeats it (MA-136 FR-2) — even across an app kill.
+  /// MA-137 FR-7..FR-9 — one Confirm Order. The key and the body are
+  /// persisted together before the first request and resent unchanged on
+  /// every retry until the checkout reaches a final outcome, so the server
+  /// resumes exactly what the customer confirmed (MA-136 FR-2/FR-2a) —
+  /// even across an app kill or a logout. Nothing is sent unless that
+  /// record is safely stored.
   Future<void> _onCheckoutRequested(
     CheckoutRequested event,
     Emitter<CartState> emit,
   ) async {
     if (!state.canConfirm) return;
-    final key = state.pendingCheckoutKey ?? newHexId();
-    final userId = state.userId;
-    if (userId != null) await _pendingCheckoutStore.write(userId, key);
+    final userId = state.userId!;
+    var pending = state.pendingCheckout;
+    if (pending == null) {
+      pending = PendingCheckout(
+        key: newHexId(),
+        cartVersion: state.cartVersion,
+        expectedPayNowPaise: state.payNowPaise,
+      );
+      if (!await _pendingCheckoutStore.write(userId, pending)) {
+        if (emit.isDone) return;
+        emit(
+          state.copyWith(
+            checkoutFailure: const Unexpected('Something went wrong. Please try again.'),
+          ),
+        );
+        return;
+      }
+    }
+    if (emit.isDone) return;
     emit(
       state.copyWith(
         checkoutStatus: CheckoutStatus.submitting,
-        pendingCheckoutKey: key,
+        pendingCheckout: pending,
         clearCheckoutFailure: true,
         lineErrors: const {},
       ),
@@ -372,15 +432,15 @@ class CartBloc extends Bloc<CartEvent, CartState> {
       CheckoutFailure failure;
       try {
         final result = await _checkoutRepository.checkout(
-          cartVersion: state.cartVersion,
-          expectedPayNowPaise: state.payNowPaise,
-          idempotencyKey: key,
+          cartVersion: pending.cartVersion,
+          expectedPayNowPaise: pending.expectedPayNowPaise,
+          idempotencyKey: pending.key,
         );
-        if (userId != null) await _pendingCheckoutStore.clear(userId);
+        await _pendingCheckoutStore.clear(userId);
         emit(
           state.copyWith(
             checkoutStatus: CheckoutStatus.idle,
-            clearPendingCheckoutKey: true,
+            clearPendingCheckout: true,
             checkoutResult: result,
           ),
         );
@@ -401,11 +461,11 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         return;
       }
 
-      if (userId != null) await _pendingCheckoutStore.clear(userId);
+      await _pendingCheckoutStore.clear(userId);
       emit(
         state.copyWith(
           checkoutStatus: CheckoutStatus.idle,
-          clearPendingCheckoutKey: true,
+          clearPendingCheckout: true,
           checkoutFailure: failure,
           lineErrors: failure is LineInvalid ? failure.reasonsByLineId : const {},
         ),

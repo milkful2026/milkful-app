@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:milkful_app/core/network/api_client.dart';
+import 'package:milkful_app/core/storage/secure_token_storage.dart';
 import 'package:milkful_app/features/auth/data/profile_repository.dart';
 import 'package:milkful_app/features/auth/models/delivery_address.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
@@ -26,6 +29,7 @@ import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_checkout_repository.dart';
 import '../../../fakes/fake_pending_checkout_store.dart';
 import '../../../fakes/fake_profile_repository.dart';
+import '../../../fakes/fake_secure_token_storage.dart';
 import '../../../fakes/fake_wallet_repository.dart';
 
 const _cowMilk = Product(
@@ -113,6 +117,14 @@ WalletView _wallet(int balancePaise) => WalletView(
   rechargeMaxPaise: 1000000,
 );
 
+/// A structurally valid JWT whose payload carries `sub` — the cart reads
+/// only that claim, locally (MA-137 FR-9).
+String _jwtWithSub(String sub) {
+  String part(Map<String, Object> json) =>
+      base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
+  return '${part({'alg': 'none'})}.${part({'sub': sub})}.sig';
+}
+
 void main() {
   late FakeCartRepository cartRepository;
   late FakeCatalogRepository catalogRepository;
@@ -120,6 +132,7 @@ void main() {
   late FakeProfileRepository profileRepository;
   late FakeCheckoutRepository checkoutRepository;
   late FakePendingCheckoutStore pendingCheckoutStore;
+  late FakeSecureTokenStorage tokenStorage;
   late GoRouter router;
 
   Future<void> pumpCart(WidgetTester tester) async {
@@ -153,6 +166,7 @@ void main() {
           RepositoryProvider<ProfileRepository>.value(value: profileRepository),
           RepositoryProvider<CheckoutRepository>.value(value: checkoutRepository),
           RepositoryProvider<PendingCheckoutStore>.value(value: pendingCheckoutStore),
+          RepositoryProvider<SecureTokenStorage>.value(value: tokenStorage),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -178,6 +192,7 @@ void main() {
     );
     checkoutRepository = FakeCheckoutRepository();
     pendingCheckoutStore = FakePendingCheckoutStore();
+    tokenStorage = FakeSecureTokenStorage()..accessToken = _jwtWithSub('user-1');
   });
 
   // --- MA-123 behaviour, unchanged -------------------------------------------
@@ -462,6 +477,80 @@ void main() {
 
     expect(find.byKey(const Key('cart-checkout-incomplete')), findsOneWidget);
     expect(checkoutRepository.calls.map((c) => c.idempotencyKey).toSet(), hasLength(1));
+  });
+
+  testWidgets('Confirm is disabled while a quantity change waits to be sent', (tester) async {
+    cartRepository = FakeCartRepository(getCartResult: mixedCart());
+
+    await pumpCart(tester);
+    await tester.tap(find.byKey(const Key('cart-item-quantity-increase-li-1')));
+    await tester.pump();
+
+    FilledButton cta() => tester.widget<FilledButton>(find.byKey(const Key('cart-checkout-cta')));
+    expect(cta().onPressed, isNull);
+    await tester.tap(find.byKey(const Key('cart-checkout-cta')));
+    await tester.pump();
+    expect(checkoutRepository.calls, isEmpty);
+
+    // The debounce fires and the write settles: Confirm comes back.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(cartRepository.updateItemRequests.single.items.first.quantity, 2);
+    expect(cta().onPressed, isNotNull);
+  });
+
+  testWidgets('A pending checkout locks the cart and offers Finish placing order', (tester) async {
+    // One line, so Add more items is on screen without scrolling.
+    cartRepository = FakeCartRepository(
+      getCartResult: const CartView(
+        items: [_lineItem],
+        cartVersion: 3,
+        quote: _payNow,
+        payNowQuote: _payNow,
+      ),
+    );
+    pendingCheckoutStore.pending['user-1'] = const PendingCheckout(
+      key: 'key-from-before',
+      cartVersion: 2,
+      expectedPayNowPaise: 9000,
+    );
+
+    await pumpCart(tester);
+
+    expect(find.byKey(const Key('cart-checkout-incomplete')), findsOneWidget);
+    expect(find.text('Finish placing order'), findsOneWidget);
+    IconButton button(String key) => tester.widget<IconButton>(find.byKey(Key(key)));
+    expect(button('cart-item-quantity-increase-li-1').onPressed, isNull);
+    expect(button('cart-item-remove-li-1').onPressed, isNull);
+    expect(
+      tester.widget<TextButton>(find.byKey(const Key('cart-add-more'))).onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.byKey(const Key('cart-checkout-cta')));
+    await tester.pumpAndSettle();
+    final call = checkoutRepository.calls.single;
+    expect(call.idempotencyKey, 'key-from-before');
+    expect(call.cartVersion, 2);
+    expect(call.expectedPayNowPaise, 9000);
+  });
+
+  testWidgets('The pending checkout is found even if the profile fails to load', (tester) async {
+    cartRepository = FakeCartRepository(getCartResult: mixedCart());
+    profileRepository.getMeException = const ApiException(
+      errorCode: 'NETWORK_ERROR',
+      message: 'offline',
+    );
+    pendingCheckoutStore.pending['user-1'] = const PendingCheckout(
+      key: 'key-from-before',
+      cartVersion: 2,
+      expectedPayNowPaise: 9000,
+    );
+
+    await pumpCart(tester);
+
+    expect(find.byKey(const Key('cart-checkout-incomplete')), findsOneWidget);
+    expect(find.text('Finish placing order'), findsOneWidget);
   });
 
   testWidgets('An invalid line is marked inline after Confirm', (tester) async {

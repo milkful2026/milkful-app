@@ -24,6 +24,19 @@ class QuantityWriteRequested extends CartEvent {
   List<Object?> get props => [lineItemId, quantity];
 }
 
+/// Sent by [CartScreen] the moment a stepper tap starts its debounce wait,
+/// before the matching [QuantityWriteRequested]. Confirm Order stays
+/// disabled until that write has been sent (MA-137 FR-7: "no quantity
+/// update in flight" includes one still waiting to go out).
+class QuantityEditStarted extends CartEvent {
+  const QuantityEditStarted({required this.lineItemId});
+
+  final String lineItemId;
+
+  @override
+  List<Object?> get props => [lineItemId];
+}
+
 /// Sets [CartState.pendingRemovalId] so the screen can show the
 /// confirmation dialog (MA-123 FR-5) — does not itself remove anything.
 class ItemRemoveRequested extends CartEvent {

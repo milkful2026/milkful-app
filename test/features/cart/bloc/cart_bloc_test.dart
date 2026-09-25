@@ -11,6 +11,7 @@ import 'package:milkful_app/features/cart/models/quote.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/auth/models/delivery_address.dart';
 import 'package:milkful_app/features/auth/models/user_profile.dart';
+import 'package:milkful_app/features/checkout/data/pending_checkout_store.dart';
 import 'package:milkful_app/features/checkout/models/checkout_failure.dart';
 import 'package:milkful_app/features/wallet/models/wallet_status.dart';
 import 'package:milkful_app/features/wallet/models/wallet_view.dart';
@@ -76,8 +77,10 @@ void main() {
     late FakeProfileRepository profileRepository;
     late FakeCheckoutRepository checkoutRepository;
     late FakePendingCheckoutStore pendingCheckoutStore;
+    String? currentUserId;
 
     setUp(() {
+      currentUserId = 'user-1';
       cartRepository = FakeCartRepository(
         getCartResult: const CartView(
           items: [_lineItem1, _lineItem2],
@@ -101,6 +104,7 @@ void main() {
       profileRepository: profileRepository,
       checkoutRepository: checkoutRepository,
       pendingCheckoutStore: pendingCheckoutStore,
+      currentUserId: () async => currentUserId,
       checkoutRetryDelays: const [Duration.zero, Duration.zero, Duration.zero],
     );
 
@@ -357,6 +361,7 @@ void main() {
     late FakeProfileRepository profileRepository;
     late FakeCheckoutRepository checkoutRepository;
     late FakePendingCheckoutStore pendingCheckoutStore;
+    String? currentUserId;
 
     const payNow = Quote(
       basePrice: 84,
@@ -419,6 +424,7 @@ void main() {
       );
       checkoutRepository = FakeCheckoutRepository();
       pendingCheckoutStore = FakePendingCheckoutStore();
+      currentUserId = 'user-1';
     });
 
     CartBloc build() => CartBloc(
@@ -428,6 +434,7 @@ void main() {
       profileRepository: profileRepository,
       checkoutRepository: checkoutRepository,
       pendingCheckoutStore: pendingCheckoutStore,
+      currentUserId: () async => currentUserId,
       checkoutRetryDelays: const [Duration.zero, Duration.zero, Duration.zero],
     );
 
@@ -539,11 +546,14 @@ void main() {
         final call = checkoutRepository.calls.single;
         expect(call.cartVersion, 7);
         expect(call.expectedPayNowPaise, 10820);
-        expect(pendingCheckoutStore.writes, [call.idempotencyKey]);
-        expect(pendingCheckoutStore.keys, isEmpty);
+        expect(pendingCheckoutStore.writes, [
+          PendingCheckout(key: call.idempotencyKey, cartVersion: 7, expectedPayNowPaise: 10820),
+        ]);
+        expect(pendingCheckoutStore.pending, isEmpty);
         expect(bloc.state.checkoutResult, FakeCheckoutRepository.defaultResult);
         expect(bloc.state.checkoutStatus, CheckoutStatus.idle);
-        expect(bloc.state.pendingCheckoutKey, isNull);
+        expect(bloc.state.pendingCheckout, isNull);
+        expect(bloc.state.isCartLocked, isFalse);
       },
     );
 
@@ -577,33 +587,134 @@ void main() {
       verify: (bloc) {
         expect(checkoutRepository.calls, hasLength(4));
         expect(bloc.state.checkoutStatus, CheckoutStatus.incomplete);
-        expect(bloc.state.pendingCheckoutKey, isNotNull);
-        expect(
-          pendingCheckoutStore.keys['user-1'],
-          bloc.state.pendingCheckoutKey,
-        );
+        expect(bloc.state.pendingCheckout, isNotNull);
+        expect(pendingCheckoutStore.pending['user-1'], bloc.state.pendingCheckout);
+        expect(bloc.state.isCartLocked, isTrue);
       },
     );
 
+    const fromBefore = PendingCheckout(
+      key: 'key-from-before',
+      cartVersion: 5,
+      expectedPayNowPaise: 9000,
+    );
+
     blocTest<CartBloc, CartState>(
-      'a key left from a previous session shows as incomplete and is reused on Confirm',
+      'a checkout left by a previous session locks the cart and resends its saved key and body',
       build: () {
-        pendingCheckoutStore.keys['user-1'] = 'key-from-before';
+        pendingCheckoutStore.pending['user-1'] = fromBefore;
         return build();
       },
       act: (bloc) async {
         await started(bloc);
         expect(bloc.state.checkoutStatus, CheckoutStatus.incomplete);
+        expect(bloc.state.isCartLocked, isTrue);
         bloc.add(const CheckoutRequested());
         await Future<void>.delayed(const Duration(milliseconds: 10));
       },
       verify: (bloc) {
-        expect(
-          checkoutRepository.calls.single.idempotencyKey,
-          'key-from-before',
-        );
+        final call = checkoutRepository.calls.single;
+        expect(call.idempotencyKey, 'key-from-before');
+        // The saved body, not the cart now on screen (version 7, ₹108.20).
+        expect(call.cartVersion, 5);
+        expect(call.expectedPayNowPaise, 9000);
+        expect(pendingCheckoutStore.writes, isEmpty);
         expect(bloc.state.checkoutResult, isNotNull);
+        expect(bloc.state.isCartLocked, isFalse);
       },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'the pending checkout is found even when the profile load fails',
+      build: () {
+        pendingCheckoutStore.pending['user-1'] = fromBefore;
+        profileRepository.getMeException = const ApiException(
+          errorCode: 'NETWORK_ERROR',
+          message: 'offline',
+        );
+        return build();
+      },
+      act: started,
+      verify: (bloc) {
+        expect(bloc.state.addressStatus, SideLoadStatus.failed);
+        expect(bloc.state.userId, 'user-1');
+        expect(bloc.state.pendingCheckout, fromBefore);
+        expect(bloc.state.checkoutStatus, CheckoutStatus.incomplete);
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'Confirm is disabled and sends nothing without a signed-in user id',
+      build: () {
+        currentUserId = null;
+        return build();
+      },
+      act: confirmed,
+      verify: (bloc) {
+        expect(bloc.state.canConfirm, isFalse);
+        expect(checkoutRepository.calls, isEmpty);
+        expect(pendingCheckoutStore.writes, isEmpty);
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'nothing is sent when the pending checkout cannot be saved',
+      build: () {
+        pendingCheckoutStore.failWrites = true;
+        return build();
+      },
+      act: confirmed,
+      verify: (bloc) {
+        expect(checkoutRepository.calls, isEmpty);
+        expect(bloc.state.checkoutStatus, CheckoutStatus.idle);
+        expect(bloc.state.pendingCheckout, isNull);
+        expect(bloc.state.checkoutFailure, isA<Unexpected>());
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'quantity edits and removals are ignored while a checkout is pending',
+      build: () {
+        pendingCheckoutStore.pending['user-1'] = fromBefore;
+        return build();
+      },
+      act: (bloc) async {
+        await started(bloc);
+        bloc
+          ..add(const QuantityEditStarted(lineItemId: 'li-1'))
+          ..add(const QuantityWriteRequested(lineItemId: 'li-1', quantity: 3))
+          ..add(const ItemRemoveRequested(lineItemId: 'li-2'))
+          ..add(const ItemRemoveConfirmed(lineItemId: 'li-2'));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      },
+      verify: (bloc) {
+        expect(cartRepository.updateItemRequests, isEmpty);
+        expect(cartRepository.removeItemRequests, isEmpty);
+        expect(bloc.state.items, hasLength(2));
+        expect(bloc.state.items.first.lineItem.quantity, 1);
+        expect(bloc.state.unsentQuantityEdits, isEmpty);
+        expect(bloc.state.pendingRemovalId, isNull);
+      },
+    );
+
+    blocTest<CartBloc, CartState>(
+      'Confirm waits for a quantity edit that has not been sent yet',
+      build: build,
+      act: (bloc) async {
+        await started(bloc);
+        bloc.add(const QuantityEditStarted(lineItemId: 'li-1'));
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.canConfirm, isFalse);
+        bloc.add(const CheckoutRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(checkoutRepository.calls, isEmpty);
+        // The screen's debounce fires: the edit goes out, then Confirm works.
+        bloc.add(const QuantityWriteRequested(lineItemId: 'li-1', quantity: 3));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(bloc.state.unsentQuantityEdits, isEmpty);
+        expect(bloc.state.canConfirm, isTrue);
+      },
+      verify: (bloc) => expect(checkoutRepository.calls, isEmpty),
     );
 
     blocTest<CartBloc, CartState>(
@@ -625,8 +736,8 @@ void main() {
           bloc.state.checkoutFailure,
           const InsufficientBalance(shortfallPaise: 2420),
         );
-        expect(bloc.state.pendingCheckoutKey, isNull);
-        expect(pendingCheckoutStore.keys, isEmpty);
+        expect(bloc.state.pendingCheckout, isNull);
+        expect(pendingCheckoutStore.pending, isEmpty);
         expect(checkoutRepository.calls, hasLength(1));
       },
     );
@@ -670,7 +781,7 @@ void main() {
       act: confirmed,
       verify: (bloc) {
         expect(bloc.state.checkoutFailure, const CartChanged());
-        expect(bloc.state.pendingCheckoutKey, isNull);
+        expect(bloc.state.pendingCheckout, isNull);
         expect(cartRepository.getCartCallCount, 2);
       },
     );

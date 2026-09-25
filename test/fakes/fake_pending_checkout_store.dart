@@ -1,24 +1,29 @@
 import 'package:milkful_app/features/checkout/data/pending_checkout_store.dart';
 
 class FakePendingCheckoutStore implements PendingCheckoutStore {
-  FakePendingCheckoutStore({Map<String, String>? initial}) : keys = {...?initial};
+  FakePendingCheckoutStore({Map<String, PendingCheckout>? initial}) : pending = {...?initial};
 
-  final Map<String, String> keys;
-  final List<String> writes = [];
+  final Map<String, PendingCheckout> pending;
+  final List<PendingCheckout> writes = [];
   int clearCallCount = 0;
 
-  @override
-  Future<String?> read(String userId) async => keys[userId];
+  /// When true, [write] reports failure and stores nothing.
+  bool failWrites = false;
 
   @override
-  Future<void> write(String userId, String key) async {
-    writes.add(key);
-    keys[userId] = key;
+  Future<PendingCheckout?> read(String userId) async => pending[userId];
+
+  @override
+  Future<bool> write(String userId, PendingCheckout value) async {
+    if (failWrites) return false;
+    writes.add(value);
+    pending[userId] = value;
+    return true;
   }
 
   @override
   Future<void> clear(String userId) async {
     clearCallCount++;
-    keys.remove(userId);
+    pending.remove(userId);
   }
 }
