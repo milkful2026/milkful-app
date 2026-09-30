@@ -15,7 +15,10 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/orders/models/order_entry.dart';
 import '../../features/orders/presentation/my_orders_screen.dart';
+import '../../features/orders/presentation/order_detail_screen.dart';
+import '../../features/orders/presentation/scheduled_delivery_screen.dart';
 import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
@@ -135,6 +138,21 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       ),
       // MA-145. Pushed from Profile's My Orders row (MA-147).
       GoRoute(path: '/orders', builder: (context, state) => const MyOrdersScreen()),
+      // MA-146. Declared before `/orders/:orderId` so "scheduled" is never
+      // read as an order id. `extra` is the list's ScheduledEntry; a deep
+      // link or restart has none, and the screen fetches by id instead.
+      GoRoute(
+        path: '/orders/scheduled/:subscriptionId',
+        builder: (context, state) => ScheduledDeliveryScreen(
+          subscriptionId: state.pathParameters['subscriptionId']!,
+          entry: state.extra is ScheduledEntry ? state.extra as ScheduledEntry : null,
+        ),
+      ),
+      GoRoute(
+        path: '/orders/:orderId',
+        builder: (context, state) =>
+            OrderDetailScreen(orderId: state.pathParameters['orderId']!),
+      ),
     ],
   );
 }

@@ -49,6 +49,51 @@ bool isKnownNotCharged(OrderSummary order) => switch (order.status.wire) {
 bool isAmountStruck(OrderSummary order) =>
     isKnownNotCharged(order) || order.status == OrderStatus.failed;
 
+// --- MA-146 Order Detail ---------------------------------------------------
+
+/// FR-3 — the banner uses the same labels and tones as the list chip.
+StatusChipSpec bannerSpec(OrderStatus status) => statusChip(status);
+
+/// FR-3 — shown under the banner for statuses that didn't go through.
+bool showsReason(OrderStatus status) => const {
+  'PAYMENT_FAILED',
+  'CANCELLED',
+  'NEEDS_ATTENTION',
+  'FAILED',
+}.contains(status.wire);
+
+/// FR-3 reason copy. "You weren't charged" appears only for
+/// `CUTOFF_PASSED`, where a Wallet void proved it (MA-142/143/144); for
+/// `SWEEP_EXHAUSTED` the charge may be unknown, so the copy only promises
+/// no double charge (matching MA-144's CHECKOUT_NEEDS_ATTENTION).
+String reasonText(String? failureReason) => switch (failureReason) {
+  'INSUFFICIENT_BALANCE' => "Your wallet didn't have enough balance for this order.",
+  'WALLET_NOT_ACTIVE' => "Your wallet wasn't active when this order was placed.",
+  'DELIVERY_ADDRESS_UNKNOWN' => "We couldn't find a delivery address on your account.",
+  'PRODUCT_UNAVAILABLE' => 'This product is no longer available.',
+  'CUTOFF_PASSED' =>
+    "This order couldn't be completed before the delivery cut-off. You weren't charged.",
+  'SWEEP_EXHAUSTED' =>
+    "We couldn't finish this order automatically. Our team has been alerted, "
+        "and you won't be charged twice.",
+  _ => 'Something went wrong with this order.',
+};
+
+/// FR-5 caption under Grand Total.
+String? billCaption(OrderSummary order) {
+  if (isKnownNotCharged(order)) return 'Not charged';
+  if (order.status == OrderStatus.needsAttention) return 'Charge under review';
+  return null;
+}
+
+/// FR-3 — `ord_3f9a2c1b…` → `#3F9A2C1B` (first 8 characters after the
+/// `ord_` prefix, uppercased).
+String displayOrderId(String orderId) {
+  final raw = orderId.startsWith('ord_') ? orderId.substring(4) : orderId;
+  final short = raw.length > 8 ? raw.substring(0, 8) : raw;
+  return '#${short.toUpperCase()}';
+}
+
 String _titleCase(String wire) {
   if (wire.isEmpty) return 'Unknown';
   return wire

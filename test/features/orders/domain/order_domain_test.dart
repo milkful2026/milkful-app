@@ -167,4 +167,42 @@ void main() {
       expect(o.createdAt, isNotNull);
     });
   });
+
+  group('MA-146 detail copy', () {
+    OrderSummary o(OrderStatus s, [String? r]) =>
+        testOrder('x', deliveryDate: _today, status: s, failureReason: r);
+
+    test('reason text for every known reason, generic otherwise', () {
+      expect(reasonText('INSUFFICIENT_BALANCE'), contains("didn't have enough balance"));
+      expect(reasonText('WALLET_NOT_ACTIVE'), contains("wasn't active"));
+      expect(reasonText('DELIVERY_ADDRESS_UNKNOWN'), contains('delivery address'));
+      expect(reasonText('PRODUCT_UNAVAILABLE'), contains('no longer available'));
+      expect(reasonText('SOMETHING_NEW'), 'Something went wrong with this order.');
+      expect(reasonText(null), 'Something went wrong with this order.');
+    });
+
+    test('the not-charged copy appears only for CUTOFF_PASSED', () {
+      expect(reasonText('CUTOFF_PASSED'), contains("You weren't charged"));
+      for (final r in ['SWEEP_EXHAUSTED', 'INSUFFICIENT_BALANCE', null]) {
+        expect(reasonText(r), isNot(contains("You weren't charged")));
+      }
+      expect(reasonText('SWEEP_EXHAUSTED'), contains("won't be charged twice"));
+    });
+
+    test('bill caption truth table', () {
+      expect(billCaption(o(OrderStatus.cancelled)), 'Not charged');
+      expect(billCaption(o(OrderStatus.paymentFailed)), 'Not charged');
+      expect(billCaption(o(OrderStatus.needsAttention, 'CUTOFF_PASSED')), 'Not charged');
+      expect(billCaption(o(OrderStatus.needsAttention, 'SWEEP_EXHAUSTED')), 'Charge under review');
+      expect(billCaption(o(OrderStatus.needsAttention)), 'Charge under review');
+      expect(billCaption(o(OrderStatus.failed)), isNull);
+      expect(billCaption(o(OrderStatus.confirmed)), isNull);
+    });
+
+    test('displayOrderId', () {
+      expect(displayOrderId('ord_3f9a2c1b77e04d'), '#3F9A2C1B');
+      expect(displayOrderId('abcdef1234'), '#ABCDEF12');
+      expect(displayOrderId('ord_ab'), '#AB');
+    });
+  });
 }

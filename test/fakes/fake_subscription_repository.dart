@@ -28,6 +28,8 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
   DateTime? editEffectiveFrom;
 
   int listCalls = 0;
+  ApiException? getException;
+  final List<String> getCalls = [];
   final List<String> pauseCalls = [];
   final List<String> resumeCalls = [];
   final List<String> stopCalls = [];
@@ -40,6 +42,20 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
     listCalls++;
     if (listException != null) throw listException!;
     return subscriptions;
+  }
+
+  @override
+  Future<SubscriptionView> get(String id) async {
+    getCalls.add(id);
+    if (getException != null) throw getException!;
+    for (final s in subscriptions) {
+      if (s.id == id) return s;
+    }
+    throw ApiException(
+      errorCode: 'SUBSCRIPTION_NOT_FOUND',
+      message: 'No subscription $id',
+      statusCode: 404,
+    );
   }
 
   @override
