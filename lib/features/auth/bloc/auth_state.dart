@@ -143,3 +143,24 @@ class AuthUserNotFound extends AuthState {
   @override
   List<Object?> get props => [mobile];
 }
+
+/// Tokens are valid (Cognito/identity-auth accepted them) but GET
+/// /users/me came back USER_NOT_FOUND: this identity was never actually
+/// registered — either the app's own registration wizard was abandoned
+/// after OTP-verify but before the address step (the address step is what
+/// actually creates the Postgres row — see
+/// RegistrationRepository.register), or the token was minted directly
+/// against identity-auth without the wizard ever running at all.
+///
+/// Deliberately distinct from `AuthAuthenticated(name: null)`, which is
+/// the *expected* shape immediately after registration's own OTP-verify
+/// (the profile genuinely doesn't exist yet at that instant — see
+/// `_onOtpVerifyRequested`'s doc comment). Collapsing the two together is
+/// exactly what used to strand a signed-in-but-unregistered user on Home
+/// with no profile and no way back into the wizard — every screen that
+/// needs an address (pricing, delivery slots, subscriptions) would fail
+/// closed with no explanation. The router sends this state to /address
+/// instead of /home so registration actually finishes.
+class AuthNeedsRegistration extends AuthState {
+  const AuthNeedsRegistration();
+}

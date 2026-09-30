@@ -30,7 +30,7 @@ import '../config/app_config.dart';
 /// slot selection lives in Home's own calendar picker, choosable any
 /// time — and Login → Login OTP Verify (MA-21) — both landing on Home.
 ///
-/// Redirect guard is deliberately narrow: it only governs `/` and `/home`,
+/// Redirect guard is deliberately narrow: it only governs `/`, `/home`,
 /// not the registration wizard's internal steps nor `/login`.
 /// AuthAuthenticated is the bloc's state for the *entire* post-verify
 /// lifetime of a registering user too (they stay authenticated all the way
@@ -42,10 +42,16 @@ import '../config/app_config.dart';
 /// button (or a deep link) — force-redirecting them to Home would abandon
 /// their in-progress wizard with no way back into it, for no real benefit
 /// (an already-authenticated user simply seeing the login screen again is
-/// harmless). Only two things are guarded:
+/// harmless). Only three things are guarded:
 /// - `/` while authenticated → already signed in, go to Home (covers
 ///   session-bootstrap landing on `/`, and a signed-in user navigating
 ///   back to Welcome)
+/// - `/` or `/home` while `AuthNeedsRegistration` → valid tokens but no
+///   Postgres profile (session bootstrap or login both surface this, not
+///   just the registration OTP-verify path — see AuthNeedsRegistration's
+///   doc comment) → send back into the wizard at /address instead of
+///   stranding them on a Home screen where every address-dependent screen
+///   will fail closed with no explanation.
 /// - `/home` while not authenticated (and not still bootstrapping) →
 ///   no session, back to the entry screen
 /// Every other route (including /login, /otp and /login/otp, mid-verify)
@@ -61,6 +67,9 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
 
       if (authState is AuthAuthenticated && path == '/') {
         return '/home';
+      }
+      if (authState is AuthNeedsRegistration && (path == '/' || path == '/home')) {
+        return '/address';
       }
       if (path == '/home' && authState is! AuthAuthenticated && authState is! AuthBootstrapping) {
         return '/';
