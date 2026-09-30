@@ -80,6 +80,7 @@ void main() {
         GoRoute(path: '/home', builder: (context, state) => const Placeholder()),
         GoRoute(path: '/wallet', builder: (context, state) => const Placeholder()),
         GoRoute(path: '/catalog', builder: (context, state) => const Placeholder()),
+        GoRoute(path: '/profile', builder: (context, state) => const Scaffold(body: Text('profile stub'))),
       ],
     );
     await tester.pumpWidget(
@@ -236,4 +237,11 @@ void main() {
       expect(submitButton.onPressed, isNull, reason: 'no day selected yet');
     },
   );
+
+  testWidgets('MA-147: the Profile tab navigates to /profile', (tester) async {
+    await pumpSubscriptions(tester);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('profile stub'), findsOneWidget);
+  });
 }

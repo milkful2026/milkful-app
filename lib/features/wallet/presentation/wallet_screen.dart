@@ -893,7 +893,7 @@ class _WalletBottomNav extends StatelessWidget {
       onTap: (index) {
         if (index == 0) context.go('/home');
         if (index == 1) context.go('/subscriptions');
-        // 3 (Profile) remains a stub, same as Home's nav.
+        if (index == 3) context.go('/profile');
       },
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),

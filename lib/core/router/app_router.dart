@@ -19,6 +19,7 @@ import '../../features/orders/models/order_entry.dart';
 import '../../features/orders/presentation/my_orders_screen.dart';
 import '../../features/orders/presentation/order_detail_screen.dart';
 import '../../features/orders/presentation/scheduled_delivery_screen.dart';
+import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
@@ -125,6 +126,8 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       // `/wallet` — no feature flag (unlike `/wallet`'s `walletEnabled`),
       // ships live once merged per MA-133 §4 FR-1's own decision.
       GoRoute(path: '/subscriptions', builder: (context, state) => const SubscriptionsScreen()),
+      // MA-147. The Profile tab's destination (was a stub on every bar).
+      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       // MA-137 FR-10. Reached with `go` from Review Cart once a checkout
       // completes; a deep link or restored route has no `extra` to show,
       // so it falls back to Home rather than crashing.

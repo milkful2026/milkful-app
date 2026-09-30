@@ -58,6 +58,7 @@ void main() {
         GoRoute(path: '/wallet', builder: (context, state) => const WalletScreen()),
         GoRoute(path: '/wallet/transactions', builder: (context, state) => const Placeholder()),
         GoRoute(path: '/home', builder: (context, state) => const Placeholder()),
+        GoRoute(path: '/profile', builder: (context, state) => const Scaffold(body: Text('profile stub'))),
       ],
     );
     await tester.pumpWidget(
@@ -235,5 +236,12 @@ void main() {
     expect(find.byKey(const Key('wallet-load-error')), findsOneWidget);
     expect(find.byKey(const Key('wallet-load-retry')), findsOneWidget);
     expect(find.byKey(const Key('wallet-balance-amount')), findsNothing);
+  });
+
+  testWidgets('MA-147: the Profile tab navigates to /profile', (tester) async {
+    await pumpWallet(tester);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('profile stub'), findsOneWidget);
   });
 }

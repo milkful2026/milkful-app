@@ -148,4 +148,43 @@ void main() {
 
     expect(router.state.uri.path, '/cart');
   });
+
+  testWidgets('MA-147: the Profile tab navigates to /profile', (tester) async {
+    authBloc = AuthBloc(
+      authRepository: FakeAuthRepository(),
+      tokenStorage: FakeSecureTokenStorage()
+        ..accessToken = 'stored-access'
+        ..refreshToken = 'stored-refresh',
+      profileRepository: FakeProfileRepository(),
+    );
+    addTearDown(() => authBloc.close());
+    final router = GoRouter(
+      initialLocation: '/home',
+      routes: [
+        GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+        GoRoute(path: '/profile', builder: (context, state) => const Placeholder()),
+      ],
+    );
+    await tester.pumpWidget(
+      RepositoryProvider<CatalogRepository>.value(
+        value: FakeCatalogRepository(),
+        child: BlocProvider<AuthBloc>.value(
+          value: authBloc,
+          child: BlocProvider<RegistrationBloc>(
+            create: (_) => RegistrationBloc(
+              repository: FakeRegistrationRepository(),
+              draftStorage: FakeDraftStorage(),
+            ),
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(router.state.uri.path, '/profile');
+  });
 }
