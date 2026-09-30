@@ -75,6 +75,16 @@ class _ProductConfigViewState extends State<_ProductConfigView> {
   int _maxQuantity(Product product) =>
       product.availableQuantity ?? _fallbackQuantityCap;
 
+  /// Backs the screen's `RefreshIndicator` — the "pull to retry" every
+  /// delivery-address/price/wallet error message on this screen promises.
+  /// Waits for the re-triggered quote to settle so the spinner doesn't
+  /// disappear before the retry has actually done anything.
+  Future<void> _onRefresh(BuildContext context) {
+    final bloc = context.read<ProductConfigBloc>();
+    bloc.add(const RetryRequested());
+    return bloc.stream.firstWhere((s) => s.quoteStatus != QuoteStatus.loading);
+  }
+
   void _changeQuantity(int delta, Product product) {
     final next = (_quantity + delta).clamp(1, _maxQuantity(product));
     if (next == _quantity) return;
@@ -144,121 +154,126 @@ class _ProductConfigViewState extends State<_ProductConfigView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _ProductBanner(product: product),
-                      const SizedBox(height: 16),
-                      if (product.tag != null) ...[
-                        _TagPill(label: product.tag!),
-                        const SizedBox(height: 8),
-                      ],
-                      Text(
-                        product.name,
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      if (outOfStock || availableFrom)
-                        _StockBanner(
-                          message: outOfStock
-                              ? 'Currently out of stock'
-                              : 'Available from ${DateFormat('MMM d').format(product.availableFrom!)}',
-                        ),
-                      if (product.subscriptionEligible) ...[
+                child: RefreshIndicator(
+                  onRefresh: () => _onRefresh(context),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ProductBanner(product: product),
+                        const SizedBox(height: 16),
+                        if (product.tag != null) ...[
+                          _TagPill(label: product.tag!),
+                          const SizedBox(height: 8),
+                        ],
                         Text(
-                          'Subscription Plan',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          product.name,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 8),
-                        _FrequencySelector(
-                          selected: state.frequency,
+                        const SizedBox(height: 20),
+                        if (outOfStock || availableFrom)
+                          _StockBanner(
+                            message: outOfStock
+                                ? 'Currently out of stock'
+                                : 'Available from ${DateFormat('MMM d').format(product.availableFrom!)}',
+                          ),
+                        if (product.subscriptionEligible) ...[
+                          Text(
+                            'Subscription Plan',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          _FrequencySelector(
+                            selected: state.frequency,
+                            disabled: outOfStock || availableFrom,
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        if (state.frequency.isSubscription) ...[
+                          Text(
+                            'Select Start Date',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          _StartDatePicker(
+                            date: state.startDate,
+                            onTap: (outOfStock || availableFrom)
+                                ? null
+                                : () => _pickStartDate(context),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        _QuantityStepper(
+                          quantity: _quantity,
+                          maxQuantity: maxQuantity,
                           disabled: outOfStock || availableFrom,
+                          onDecrease: () => _changeQuantity(-1, product),
+                          onIncrease: () => _changeQuantity(1, product),
                         ),
-                        const SizedBox(height: 20),
-                      ],
-                      if (state.frequency.isSubscription) ...[
-                        Text(
-                          'Select Start Date',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        _StartDatePicker(
-                          date: state.startDate,
-                          onTap: (outOfStock || availableFrom)
-                              ? null
-                              : () => _pickStartDate(context),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                      _QuantityStepper(
-                        quantity: _quantity,
-                        maxQuantity: maxQuantity,
-                        disabled: outOfStock || availableFrom,
-                        onDecrease: () => _changeQuantity(-1, product),
-                        onIncrease: () => _changeQuantity(1, product),
-                      ),
-                      // MA-133 FR-6 — new UI, not in the mock (MA-133 §11
-                      // Risk): a required delivery-slot picker for the
-                      // subscription create flow. No slots (missing zone
-                      // or an empty response) → nothing renders here and
-                      // Subscribe Now stays disabled
-                      // (ProductConfigState.slotGateBlocks).
-                      if (state.frequency.isSubscription && state.slots.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        Text(
-                          'Select Delivery Slot',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        DeliverySlotChipRow(
-                          slots: state.slots,
-                          selectedSlotId: state.slotId,
-                          onSlotSelected: (id) => context
-                              .read<ProductConfigBloc>()
-                              .add(SlotSelected(id)),
-                          keyPrefix: 'product-config-slot',
-                        ),
-                      ],
-                      if (state.frequency.isSubscription &&
-                          state.slotsStatus == SlotsStatus.failed)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Text(
-                            "Couldn't load delivery slots for your address",
-                            key: const Key('product-config-slots-error'),
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                        // MA-133 FR-6 — new UI, not in the mock (MA-133 §11
+                        // Risk): a required delivery-slot picker for the
+                        // subscription create flow. No slots (missing zone
+                        // or an empty response) → nothing renders here and
+                        // Subscribe Now stays disabled
+                        // (ProductConfigState.slotGateBlocks).
+                        if (state.frequency.isSubscription &&
+                            state.slots.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Text(
+                            'Select Delivery Slot',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          DeliverySlotChipRow(
+                            slots: state.slots,
+                            selectedSlotId: state.slotId,
+                            onSlotSelected: (id) => context
+                                .read<ProductConfigBloc>()
+                                .add(SlotSelected(id)),
+                            keyPrefix: 'product-config-slot',
+                          ),
+                        ],
+                        if (state.frequency.isSubscription &&
+                            state.slotsStatus == SlotsStatus.failed)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Text(
+                              "Couldn't load delivery slots for your address",
+                              key: const Key('product-config-slots-error'),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
                           ),
-                        ),
-                      if (state.frequency.isSubscription &&
-                          state.walletCheckStatus ==
-                              WalletCheckStatus.insufficient)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Text(
-                            'A minimum wallet balance of ₹500 is required for subscriptions — '
-                            'your balance is ₹${state.walletBalance}.',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                        if (state.frequency.isSubscription &&
+                            state.walletCheckStatus ==
+                                WalletCheckStatus.insufficient)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Text(
+                              'A minimum wallet balance of ₹500 is required for subscriptions — '
+                              'your balance is ₹${state.walletBalance}.',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
                           ),
-                        ),
-                      if (state.frequency.isSubscription &&
-                          state.walletCheckStatus == WalletCheckStatus.failed)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Text(
-                            state.walletErrorMessage ?? "Couldn't check your wallet balance — pull to retry",
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
+                        if (state.frequency.isSubscription &&
+                            state.walletCheckStatus == WalletCheckStatus.failed)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Text(
+                              state.walletErrorMessage ?? "Couldn't check your wallet balance — pull to retry",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

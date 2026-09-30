@@ -133,6 +133,37 @@ void main() {
     );
 
     blocTest<ProductConfigBloc, ProductConfigState>(
+      'RetryRequested re-resolves a previously-failed delivery state and '
+      'reloads the quote, without resetting the selected frequency',
+      build: () {
+        profileRepository.getMeException = const ApiException(
+          errorCode: 'NETWORK_ERROR',
+          message: 'offline',
+        );
+        return build();
+      },
+      act: (bloc) async {
+        bloc.add(const ProductConfigStarted(_product));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        bloc.add(const FrequencyChanged(Frequency.daily));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        profileRepository.getMeException = null;
+        bloc.add(const RetryRequested());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(bloc.state.quoteStatus, QuoteStatus.loaded);
+        expect(bloc.state.quote, _quote);
+        expect(
+          bloc.state.frequency,
+          Frequency.daily,
+          reason: 'a retry must not reset the customer\'s in-progress selection',
+        );
+        expect(pricingRepository.requests.last.deliveryState, 'Karnataka');
+      },
+    );
+
+    blocTest<ProductConfigBloc, ProductConfigState>(
       'only the latest of two rapid QuantityChanged events lands in state (restartable)',
       build: () {
         pricingRepository.delay = const Duration(milliseconds: 50);
