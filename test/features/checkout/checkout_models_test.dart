@@ -163,6 +163,18 @@ void main() {
       expect(map('PRICE_CHANGED', status: 409).clearsKey, isTrue);
     });
 
+    test('checkouts the server closed (MA-138) clear the key, message shown as-is', () {
+      // No app mapping for these: the unknown-code path must end the attempt
+      // so the next Confirm uses a fresh key, and show the server's message.
+      final cancelled = map('CHECKOUT_CANCELLED', status: 409);
+      expect(cancelled, const Unexpected('m'));
+      expect(cancelled.clearsKey, isTrue);
+
+      final needsAttention = map('CHECKOUT_NEEDS_ATTENTION', status: 409);
+      expect(needsAttention, const Unexpected('m'));
+      expect(needsAttention.clearsKey, isTrue);
+    });
+
     test('LINE_INVALID maps line ids to reasons', () {
       final failure = map(
         'LINE_INVALID',
