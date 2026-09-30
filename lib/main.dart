@@ -17,6 +17,7 @@ import 'features/catalog/data/catalog_repository.dart';
 import 'features/checkout/data/checkout_repository.dart';
 import 'features/checkout/data/pending_checkout_store.dart';
 import 'features/onboarding/bloc/registration_bloc.dart';
+import 'features/orders/data/order_repository.dart';
 import 'features/onboarding/data/places_repository.dart';
 import 'features/onboarding/data/registration_repository.dart';
 import 'features/subscriptions/data/subscription_repository.dart';
@@ -67,6 +68,8 @@ class MilkfulApp extends StatelessWidget {
     // POST /orders/checkout) and the per-user key that lets a retried or
     // interrupted Confirm resume instead of repeating.
     final checkoutRepository = DioCheckoutRepository(apiClient);
+    // MA-26 — Order Service read APIs (My Orders, order detail).
+    final orderRepository = DioOrderRepository(apiClient);
     final pendingCheckoutStore = SharedPreferencesPendingCheckoutStore();
     final paymentMethodStore = SharedPreferencesPaymentMethodStore();
     // A fresh SDK instance shared across every Wallet screen visit for the
@@ -108,6 +111,7 @@ class MilkfulApp extends StatelessWidget {
         RepositoryProvider<RazorpayCheckout>.value(value: razorpayCheckout),
         RepositoryProvider<CheckoutRepository>.value(value: checkoutRepository),
         RepositoryProvider<PendingCheckoutStore>.value(value: pendingCheckoutStore),
+        RepositoryProvider<OrderRepository>.value(value: orderRepository),
       ],
       child: MultiBlocProvider(
         providers: [

@@ -15,6 +15,7 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/orders/presentation/my_orders_screen.dart';
 import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
@@ -132,6 +133,8 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
           return OrderSuccessScreen(args: args);
         },
       ),
+      // MA-145. Pushed from Profile's My Orders row (MA-147).
+      GoRoute(path: '/orders', builder: (context, state) => const MyOrdersScreen()),
     ],
   );
 }

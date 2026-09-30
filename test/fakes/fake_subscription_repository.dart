@@ -27,6 +27,7 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
   ApiException? actionException;
   DateTime? editEffectiveFrom;
 
+  int listCalls = 0;
   final List<String> pauseCalls = [];
   final List<String> resumeCalls = [];
   final List<String> stopCalls = [];
@@ -36,6 +37,7 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
 
   @override
   Future<List<SubscriptionView>> list() async {
+    listCalls++;
     if (listException != null) throw listException!;
     return subscriptions;
   }
