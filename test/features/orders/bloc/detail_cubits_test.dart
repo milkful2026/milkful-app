@@ -82,6 +82,30 @@ void main() {
       await cubit.close();
     });
 
+    test('a failed refresh keeps the loaded order and returns false', () async {
+      final cubit = build('ord_1');
+      await cubit.load();
+      orders.getException = const ApiException(
+        errorCode: 'SERVICE_UNAVAILABLE',
+        message: 'down',
+        statusCode: 503,
+      );
+      expect(await cubit.refresh(), isFalse);
+      expect((cubit.state as OrderDetailLoaded).order.orderId, 'ord_1');
+      orders.getException = null;
+      expect(await cubit.refresh(), isTrue);
+      await cubit.close();
+    });
+
+    test('a refresh that finds the order gone → not found', () async {
+      final cubit = build('ord_1');
+      await cubit.load();
+      orders.byId = {};
+      expect(await cubit.refresh(), isFalse);
+      expect(cubit.state, isA<OrderDetailNotFound>());
+      await cubit.close();
+    });
+
     test('a failed product lookup still loads, with a null product', () async {
       catalog.getProductException = Exception('catalog down');
       final cubit = build('ord_1');
@@ -127,6 +151,27 @@ void main() {
       expect(s.entry, entry);
       expect(s.product, _milk);
       expect(subs.getCalls, isEmpty);
+      await cubit.close();
+    });
+
+    test('Retry after a failed refresh fetches instead of reusing the initial entry', () async {
+      final cubit = build(initial: entry);
+      await cubit.load();
+      subs.getException = const ApiException(
+        errorCode: 'SERVICE_UNAVAILABLE',
+        message: 'down',
+        statusCode: 503,
+      );
+      await cubit.refresh();
+      expect(cubit.state, isA<ScheduledDeliveryError>());
+
+      subs.getException = null;
+      subs.subscriptions = [_sub(next: _d(3))]; // the date moved meanwhile
+      await cubit.load(); // Retry
+      final s = cubit.state as ScheduledDeliveryLoaded;
+      expect(s.entry.date, _d(3));
+      expect(s.change, isA<DateChanged>()); // compared with the d(2) last shown
+      expect(subs.getCalls, ['sub_1', 'sub_1']);
       await cubit.close();
     });
 

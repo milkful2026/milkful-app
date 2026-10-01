@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../catalog/models/product.dart';
 import '../../domain/order_status_copy.dart';
@@ -258,6 +259,16 @@ class IconLine extends StatelessWidget {
 }
 
 /// Full-screen message with one button (not found / gone / error).
+/// "Back to My Orders": pops when there is a screen to return to, otherwise
+/// (deep link, app restart) goes to `/orders`, since `pop()` would throw.
+void backToMyOrders(BuildContext context) {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go('/orders');
+  }
+}
+
 class DetailMessage extends StatelessWidget {
   const DetailMessage({
     super.key,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/money.dart';
 import '../../catalog/data/catalog_repository.dart';
@@ -20,6 +19,17 @@ class OrderDetailScreen extends StatelessWidget {
 
   final String orderId;
 
+  /// A failed refresh keeps the order on screen and says so.
+  Future<void> _refresh(BuildContext context) async {
+    final cubit = context.read<OrderDetailCubit>();
+    final ok = await cubit.refresh();
+    if (!ok && cubit.state is OrderDetailLoaded && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't refresh. Try again.")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -37,7 +47,7 @@ class OrderDetailScreen extends StatelessWidget {
               title: 'Order not found',
               body: "This order doesn't exist or isn't on your account.",
               buttonLabel: 'Back to My Orders',
-              onPressed: () => context.pop(),
+              onPressed: () => backToMyOrders(context),
             ),
             OrderDetailError() => DetailMessage(
               title: "Couldn't load this order.",
@@ -45,7 +55,7 @@ class OrderDetailScreen extends StatelessWidget {
               onPressed: () => context.read<OrderDetailCubit>().load(),
             ),
             OrderDetailLoaded(:final order, :final products) => RefreshIndicator(
-              onRefresh: () => context.read<OrderDetailCubit>().refresh(),
+              onRefresh: () => _refresh(context),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.only(top: 8, bottom: 24),

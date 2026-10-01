@@ -56,11 +56,15 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
   /// Shows the skeleton; used on open and after an error.
   Future<void> load() async {
     emit(const OrderDetailLoading());
-    await refresh();
+    await _fetch(keepContentOnError: false);
   }
 
-  /// Pull-to-refresh: keeps the current content until the result arrives.
-  Future<void> refresh() async {
+  /// Pull-to-refresh: keeps the current content until the result arrives,
+  /// and keeps it if the refresh fails (like My Orders). Returns false on a
+  /// failure, so the screen can say so.
+  Future<bool> refresh() => _fetch(keepContentOnError: true);
+
+  Future<bool> _fetch({required bool keepContentOnError}) async {
     try {
       final order = await _orders.getById(orderId);
       final products = await resolveProducts(
@@ -68,13 +72,24 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
         order.items.map((i) => i.productId).toSet(),
       );
       if (!isClosed) emit(OrderDetailLoaded(order, products));
+      return true;
     } on ApiException catch (e) {
-      if (isClosed) return;
       final notFound = e.statusCode == 404 || e.errorCode == 'ORDER_NOT_FOUND';
-      emit(notFound ? const OrderDetailNotFound() : const OrderDetailError());
+      if (notFound) {
+        if (!isClosed) emit(const OrderDetailNotFound());
+      } else {
+        _fail(keepContentOnError);
+      }
+      return false;
     } catch (_) {
-      if (!isClosed) emit(const OrderDetailError());
+      _fail(keepContentOnError);
+      return false;
     }
+  }
+
+  void _fail(bool keepContent) {
+    if (isClosed || (keepContent && state is OrderDetailLoaded)) return;
+    emit(const OrderDetailError());
   }
 }
 

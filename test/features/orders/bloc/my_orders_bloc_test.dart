@@ -191,6 +191,43 @@ void main() {
     await bloc.close();
   });
 
+  test('a page request while a refresh is in flight is ignored', () async {
+    final bloc = build()..add(const MyOrdersOpened());
+    await settle(bloc);
+    orders.firstPageGate = Completer<void>();
+    orders.pages = {
+      null: OrdersPage(items: [testOrder('fresh', deliveryDate: _d(-1))], nextCursor: 'c3'),
+      'c2': OrdersPage(items: [testOrder('older', deliveryDate: _d(-5))]),
+    };
+    final refresh = MyOrdersRefreshed();
+    bloc.add(refresh);
+    await settle(bloc);
+    bloc.add(const PastPageRequested()); // would use the old cursor c2
+    await settle(bloc);
+    orders.firstPageGate!.complete();
+    await refresh.completer.future;
+    final s = await settle(bloc);
+    expect(orders.listCursors, isNot(contains('c2')));
+    expect(s.orders.map((o) => o.orderId), ['fresh']);
+    expect(s.nextCursor, 'c3');
+    await bloc.close();
+  });
+
+  test('retrying failed orders sets them back to loading while in flight', () async {
+    orders.listException = _boom;
+    final bloc = build()..add(const MyOrdersOpened());
+    await settle(bloc);
+    orders.listException = null;
+    orders.firstPageGate = Completer<void>();
+    bloc.add(const RetryFailedSources());
+    var s = await settle(bloc);
+    expect(s.ordersStatus, SourceStatus.loading);
+    orders.firstPageGate!.complete();
+    s = await settle(bloc);
+    expect(s.ordersStatus, SourceStatus.loaded);
+    await bloc.close();
+  });
+
   test('a failed refresh keeps the data and bumps refreshFailedCount', () async {
     final bloc = build()..add(const MyOrdersOpened());
     await settle(bloc);

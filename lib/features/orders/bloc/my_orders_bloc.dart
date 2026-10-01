@@ -48,6 +48,11 @@ class MyOrdersBloc extends Bloc<MyOrdersEvent, MyOrdersState> {
   /// Bumped by every (re)load, so a Past page that started before it is
   /// discarded when it returns (a refresh replaces the orders list).
   int _generation = 0;
+
+  /// Non-zero while an orders (re)load is in flight. Past paging waits for it:
+  /// a page started now would use the cursor the refresh is about to
+  /// replace, then append its items and overwrite the new cursor.
+  int _ordersLoadsInFlight = 0;
   final Set<String> _requestedProducts = {};
 
   Future<void> _onRefreshed(MyOrdersRefreshed event, Emitter<MyOrdersState> emit) async {
@@ -78,10 +83,16 @@ class MyOrdersBloc extends Bloc<MyOrdersEvent, MyOrdersState> {
       ),
     );
 
-    final results = await Future.wait([
-      orders ? _attempt(() => _orders.listMine(limit: pageSize)) : Future.value(null),
-      subscriptions ? _attempt(_subscriptions.list) : Future.value(null),
-    ]);
+    if (orders) _ordersLoadsInFlight++;
+    final List<Object?> results;
+    try {
+      results = await Future.wait([
+        orders ? _attempt(() => _orders.listMine(limit: pageSize)) : Future.value(null),
+        subscriptions ? _attempt(_subscriptions.list) : Future.value(null),
+      ]);
+    } finally {
+      if (orders) _ordersLoadsInFlight--;
+    }
     if (isClosed) return false;
 
     var ok = true;
@@ -123,7 +134,9 @@ class MyOrdersBloc extends Bloc<MyOrdersEvent, MyOrdersState> {
     Emitter<MyOrdersState> emit,
   ) async {
     final cursor = state.nextCursor;
-    if (cursor == null || state.ordersStatus != SourceStatus.loaded) return;
+    if (cursor == null || state.ordersStatus != SourceStatus.loaded || _ordersLoadsInFlight > 0) {
+      return;
+    }
     final generation = _generation;
     emit(state.copyWith(pagingStatus: PagingStatus.loading));
     final page = await _attempt(() => _orders.listMine(cursor: cursor, limit: pageSize));

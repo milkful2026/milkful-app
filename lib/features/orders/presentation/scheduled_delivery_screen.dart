@@ -74,7 +74,7 @@ class ScheduledDeliveryScreen extends StatelessWidget {
             ScheduledDeliveryGone() => DetailMessage(
               title: 'This delivery is no longer scheduled.',
               buttonLabel: 'Back to My Orders',
-              onPressed: () => context.pop(),
+              onPressed: () => backToMyOrders(context),
             ),
             ScheduledDeliveryError() => DetailMessage(
               title: "Couldn't load this delivery.",

@@ -114,6 +114,7 @@ class _MyOrdersViewState extends State<_MyOrdersView> with SingleTickerProviderS
                       orders: state.buckets.today,
                       products: state.products,
                       ordersFailed: state.ordersStatus == SourceStatus.failed,
+                      ordersLoading: state.ordersStatus == SourceStatus.loading,
                     ),
                   ),
                   SliverPersistentHeader(pinned: true, delegate: _TabBarHeader(_tabs)),
@@ -149,6 +150,10 @@ class _MyOrdersViewState extends State<_MyOrdersView> with SingleTickerProviderS
   List<Widget> _upcomingSlivers(BuildContext context, MyOrdersState state) {
     final groups = state.upcomingGroups;
     if (groups.isEmpty) {
+      if (state.ordersStatus == SourceStatus.loading ||
+          state.subscriptionsStatus == SourceStatus.loading) {
+        return [const SliverToBoxAdapter(child: _LoadingMessage())];
+      }
       // Empty only when every feeding source loaded (MA-145 empty-state rule).
       final allLoaded =
           state.ordersStatus == SourceStatus.loaded &&
@@ -172,6 +177,9 @@ class _MyOrdersViewState extends State<_MyOrdersView> with SingleTickerProviderS
 
   List<Widget> _pastSlivers(BuildContext context, MyOrdersState state) {
     final groups = state.pastGroups;
+    if (state.ordersStatus == SourceStatus.loading) {
+      return [const SliverToBoxAdapter(child: _LoadingMessage())];
+    }
     if (state.ordersStatus == SourceStatus.failed) {
       return [const SliverToBoxAdapter(child: _EmptyMessage(text: "Couldn't load past orders."))];
     }
@@ -307,6 +315,17 @@ class _FullError extends StatelessWidget {
         ],
       ),
     ),
+  );
+}
+
+/// A source is being retried: neither its data nor an empty state is known.
+class _LoadingMessage extends StatelessWidget {
+  const _LoadingMessage();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(24),
+    child: Center(child: CircularProgressIndicator()),
   );
 }
 

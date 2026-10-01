@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -209,6 +211,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Couldn't load past orders."), findsOneWidget);
     expect(find.text('No past orders yet'), findsNothing);
+  });
+
+  testWidgets('retrying failed orders shows a spinner, never the empty states', (tester) async {
+    orders.listException = _boom;
+    await pump(tester);
+    orders.listException = null;
+    orders.firstPageGate = Completer<void>();
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(find.text('No deliveries today'), findsNothing);
+    expect(find.text('No upcoming deliveries'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    await tester.tap(find.text('Past Orders'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('No past orders yet'), findsNothing);
+    orders.firstPageGate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('No deliveries today'), findsOneWidget);
   });
 
   testWidgets('both sources failed → full-screen error with Retry', (tester) async {

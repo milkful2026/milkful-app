@@ -6,8 +6,8 @@ import 'package:milkful_app/features/orders/models/order_summary.dart';
 import 'package:milkful_app/features/orders/models/orders_page.dart';
 
 /// Pages keyed by cursor (`null` = first page). Configure `*Exception`
-/// fields to simulate failures; `pageGate` holds a page response open so a
-/// test can race it against a refresh.
+/// fields to simulate failures; `pageGate` holds a later page's response
+/// open (and `firstPageGate` the first page's) so a test can race them.
 class FakeOrderRepository implements OrderRepository {
   FakeOrderRepository({Map<String?, OrdersPage>? pages, Map<String, OrderSummary>? byId})
     : pages = pages ?? {null: const OrdersPage(items: [])},
@@ -21,6 +21,7 @@ class FakeOrderRepository implements OrderRepository {
   Object? pageException;
   Object? getException;
   Completer<void>? pageGate;
+  Completer<void>? firstPageGate;
 
   final List<String?> listCursors = [];
   final List<String> getCalls = [];
@@ -28,6 +29,7 @@ class FakeOrderRepository implements OrderRepository {
   @override
   Future<OrdersPage> listMine({String? cursor, int limit = 50}) async {
     listCursors.add(cursor);
+    if (cursor == null && firstPageGate != null) await firstPageGate!.future;
     if (cursor == null && listException != null) throw listException!;
     if (cursor != null) {
       if (pageGate != null) await pageGate!.future;

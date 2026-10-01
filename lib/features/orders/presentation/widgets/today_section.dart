@@ -18,6 +18,7 @@ class TodaySection extends StatelessWidget {
     required this.orders,
     required this.products,
     required this.ordersFailed,
+    this.ordersLoading = false,
   });
 
   final List<OrderSummary> orders;
@@ -25,6 +26,10 @@ class TodaySection extends StatelessWidget {
 
   /// The orders source failed: show "Couldn't load…", never the empty text.
   final bool ordersFailed;
+
+  /// The orders source is being (re)loaded, e.g. after Retry: show a
+  /// spinner, never the empty text.
+  final bool ordersLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +53,7 @@ class TodaySection extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!ordersFailed && itemCount > 0)
+              if (!ordersFailed && !ordersLoading && itemCount > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                   decoration: BoxDecoration(
@@ -71,7 +76,12 @@ class TodaySection extends StatelessWidget {
               color: theme.colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(24),
             ),
-            child: ordersFailed
+            child: ordersLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : ordersFailed
                 ? const _SectionMessage("Couldn't load today's deliveries.")
                 : orders.isEmpty
                 ? const _SectionMessage('No deliveries today')

@@ -25,6 +25,8 @@ DateTime _clock() => DateTime.utc(2026, 10, 1, 4, 30); // 10:00 IST
 final _today = DateTime(2026, 10, 1);
 DateTime _d(int offset) => _today.add(Duration(days: offset));
 
+const _boom = ApiException(errorCode: 'SERVICE_UNAVAILABLE', message: 'down', statusCode: 503);
+
 Product _p(String id, String name, double price) => Product(
   id: id,
   categoryId: 'c',
@@ -54,7 +56,14 @@ void main() {
     visited = [];
   });
 
-  Future<GoRouter> pump(WidgetTester tester, String location, {Object? extra}) async {
+  /// [deepLink] opens [location] with nothing beneath it (a deep link or
+  /// app restart), instead of pushing it over `/start`.
+  Future<GoRouter> pump(
+    WidgetTester tester,
+    String location, {
+    Object? extra,
+    bool deepLink = false,
+  }) async {
     // Tall enough that every card of the detail screens is built.
     tester.view.physicalSize = const Size(1080, 3200);
     tester.view.devicePixelRatio = 1.0;
@@ -69,6 +78,7 @@ void main() {
       routes: [
         GoRoute(path: '/start', builder: (_, s) => stub(s)),
         GoRoute(path: '/subscriptions', builder: (_, s) => stub(s)),
+        GoRoute(path: '/orders', builder: (_, s) => stub(s)),
         GoRoute(
           path: '/orders/scheduled/:id',
           builder: (_, s) => ScheduledDeliveryScreen(
@@ -94,7 +104,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    router.push(location, extra: extra);
+    if (deepLink) {
+      router.go(location, extra: extra);
+    } else {
+      router.push(location, extra: extra);
+    }
     await tester.pumpAndSettle();
     return router;
   }
@@ -192,6 +206,26 @@ void main() {
       expect(find.text('stub /start'), findsOneWidget);
     });
 
+    testWidgets('deep-linked 404: Back to My Orders goes to /orders', (tester) async {
+      await pump(tester, '/orders/ord_missing', deepLink: true);
+      expect(find.text('Order not found'), findsOneWidget);
+      await tester.tap(find.text('Back to My Orders'));
+      await tester.pumpAndSettle();
+      expect(find.text('stub /orders'), findsOneWidget);
+    });
+
+    testWidgets('a failed refresh keeps the order and shows a SnackBar', (tester) async {
+      orders.byId = {'ord_1': testOrder('ord_1', deliveryDate: _d(1))};
+      await pump(tester, '/orders/ord_1');
+      expect(find.text('Grand Total'), findsOneWidget);
+      orders.getException = _boom;
+      await tester.fling(find.byType(ListView), const Offset(0, 1500), 1000);
+      await tester.pumpAndSettle();
+      expect(find.text("Couldn't refresh. Try again."), findsOneWidget);
+      expect(find.text('Grand Total'), findsOneWidget);
+      expect(find.text("Couldn't load this order."), findsNothing);
+    });
+
     testWidgets('long-press copies the full order id', (tester) async {
       final calls = <MethodCall>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -263,6 +297,25 @@ void main() {
       await tester.tap(find.text('View order'));
       await tester.pumpAndSettle();
       expect(find.text('Order Placed'), findsOneWidget); // now on /orders/ord_9
+    });
+
+    testWidgets('deep-linked and no longer scheduled: Back to My Orders goes to /orders', (
+      tester,
+    ) async {
+      subs.subscriptions = [
+        SubscriptionView(
+          id: 'sub_1',
+          productId: 'cow-milk',
+          quantity: 2,
+          schedule: const Schedule(type: ScheduleType.daily),
+          status: SubscriptionStatus.stopped,
+        ),
+      ];
+      await pump(tester, '/orders/scheduled/sub_1', deepLink: true);
+      expect(find.text('This delivery is no longer scheduled.'), findsOneWidget);
+      await tester.tap(find.text('Back to My Orders'));
+      await tester.pumpAndSettle();
+      expect(find.text('stub /orders'), findsOneWidget);
     });
 
     testWidgets('a failed fetch shows Retry, and Retry loads it', (tester) async {

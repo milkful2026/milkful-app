@@ -93,22 +93,30 @@ class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
   final Clock _clock;
   final String subscriptionId;
 
-  /// With an entry from My Orders, no subscription call; otherwise (deep
-  /// link, app restart) fetch by id. Never compares or looks up orders.
+  /// The entry from My Orders is used for the first load only. After that
+  /// (e.g. Retry after a failed refresh) it may be stale, so always fetch.
+  bool _initialUsed = false;
+
+  /// The delivery date last shown to the customer, so a fetch after an error
+  /// can still tell them it moved. Null until something has been shown.
+  DateTime? _shownDate;
+
+  /// First load: with an entry from My Orders, no subscription call;
+  /// otherwise (deep link, app restart) fetch by id, with no change notice.
+  /// Retry: always fetches, compared against the last date shown.
   Future<void> load() async {
     emit(const ScheduledDeliveryLoading());
     final initial = _initial;
-    if (initial != null && initial.subscriptionId == subscriptionId) {
+    if (!_initialUsed && initial != null && initial.subscriptionId == subscriptionId) {
+      _initialUsed = true;
       await _emitLoaded(initial, const NoChange());
       return;
     }
-    await _fetch(shownDate: null);
+    _initialUsed = true;
+    await _fetch(shownDate: _shownDate);
   }
 
-  Future<void> refresh() async {
-    final current = state;
-    await _fetch(shownDate: current is ScheduledDeliveryLoaded ? current.entry.date : null);
-  }
+  Future<void> refresh() => _fetch(shownDate: _shownDate);
 
   Future<void> _fetch({required DateTime? shownDate}) async {
     try {
@@ -146,6 +154,8 @@ class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
 
   Future<void> _emitLoaded(ScheduledEntry entry, ScheduleChange change) async {
     final products = await resolveProducts(_catalog, [entry.productId]);
-    if (!isClosed) emit(ScheduledDeliveryLoaded(entry, products[entry.productId], change: change));
+    if (isClosed) return;
+    _shownDate = entry.date;
+    emit(ScheduledDeliveryLoaded(entry, products[entry.productId], change: change));
   }
 }
