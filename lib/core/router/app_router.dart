@@ -22,8 +22,8 @@ import '../../features/orders/presentation/scheduled_delivery_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
+import '../../features/wallet/presentation/transaction_history_screen.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
-import '../../features/wallet/presentation/wallet_transactions_placeholder.dart';
 import '../../features/checkout/presentation/order_success_screen.dart';
 import '../config/app_config.dart';
 
@@ -125,11 +125,13 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
         builder: (context, state) =>
             AppConfig.walletEnabled ? const WalletScreen() : const WalletComingSoon(),
       ),
-      // Reached from the balance card's Passbook button and the "View All
-      // Transactions" link; MA-27 replaces this builder.
+      // MA-149. Reached from the Wallet screen's Passbook button and "View All
+      // Transactions" link, and Profile's Transactions row; behind the same
+      // `WALLET_ENABLED` gate as `/wallet`.
       GoRoute(
         path: '/wallet/transactions',
-        builder: (context, state) => const WalletTransactionsPlaceholder(),
+        builder: (context, state) =>
+            AppConfig.walletEnabled ? const TransactionHistoryScreen() : const WalletComingSoon(),
       ),
       // MA-133 FR-1. A top-level `go` destination off the bottom nav, like
       // `/wallet` — no feature flag (unlike `/wallet`'s `walletEnabled`),

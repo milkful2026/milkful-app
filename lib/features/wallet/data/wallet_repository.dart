@@ -1,5 +1,6 @@
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import '../models/ledger_entry.dart';
 import '../models/payment_method.dart';
 import '../models/payment_view.dart';
 import '../models/recharge_order.dart';
@@ -45,6 +46,12 @@ abstract class WalletRepository {
   /// MA-1 FR-3, reused as-is by the Wallet screen's "Retry setup" action
   /// (MA-125 FR-2) when `status == FAILED`.
   Future<void> retryProvision();
+
+  /// MA-27 — `GET /wallet/me/transactions`, newest first, keyset-paged.
+  /// [types] (MA-148) restricts to those ledger types; null = all. Throws
+  /// [ApiException] — `404 WALLET_NOT_FOUND` while the wallet is still
+  /// being provisioned.
+  Future<LedgerPage> listTransactions({String? cursor, int limit = 50, List<String>? types});
 }
 
 class DioWalletRepository implements WalletRepository {
@@ -108,5 +115,23 @@ class DioWalletRepository implements WalletRepository {
   @override
   Future<void> retryProvision() async {
     await _client.request('POST', '${AppConfig.walletBaseUrl}/wallet/me/retry');
+  }
+
+  @override
+  Future<LedgerPage> listTransactions({
+    String? cursor,
+    int limit = 50,
+    List<String>? types,
+  }) async {
+    final data = await _client.request(
+      'GET',
+      '${AppConfig.walletBaseUrl}/wallet/me/transactions',
+      queryParameters: {
+        'limit': limit,
+        'cursor': ?cursor,
+        if (types != null && types.isNotEmpty) 'types': types.join(','),
+      },
+    );
+    return LedgerPage.fromJson(data);
   }
 }

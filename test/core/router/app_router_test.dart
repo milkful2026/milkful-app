@@ -19,6 +19,8 @@ import 'package:milkful_app/features/orders/data/order_repository.dart';
 import 'package:milkful_app/features/orders/presentation/order_detail_screen.dart';
 import 'package:milkful_app/features/orders/presentation/scheduled_delivery_screen.dart';
 import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
+import 'package:milkful_app/features/wallet/presentation/transaction_history_screen.dart';
+import 'package:milkful_app/features/wallet/presentation/wallet_coming_soon.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 import '../../fakes/fake_cart_repository.dart';
@@ -250,6 +252,19 @@ void main() {
       router.push('/orders/ord_1');
       await tester.pumpAndSettle();
       expect(find.byType(OrderDetailScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'MA-149: /wallet/transactions is behind the WALLET_ENABLED gate (off in tests)',
+    (tester) async {
+      final router = await pumpAuthenticatedRouter(tester);
+
+      router.push('/wallet/transactions');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WalletComingSoon), findsOneWidget);
+      expect(find.byType(TransactionHistoryScreen), findsNothing);
     },
   );
 }

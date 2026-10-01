@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/wallet/data/wallet_repository.dart';
+import 'package:milkful_app/features/wallet/models/ledger_entry.dart';
 import 'package:milkful_app/features/wallet/models/payment_method.dart';
 import 'package:milkful_app/features/wallet/models/payment_view.dart';
 import 'package:milkful_app/features/wallet/models/recharge_order.dart';
@@ -42,6 +45,16 @@ class FakeWalletRepository implements WalletRepository {
   int getWalletCallCount = 0;
   int getPaymentCallCount = 0;
   int retryProvisionCallCount = 0;
+
+  /// MA-27 — pages keyed by `'${types?.join(',')}|$cursor'` (e.g. `'|'` is
+  /// the unfiltered first page). [listTransactionsException] fails first
+  /// pages; [transactionsPageException] fails later ones; [transactionsGate]
+  /// holds later pages open so a test can race them.
+  final Map<String, LedgerPage> ledgerPages = {};
+  Object? listTransactionsException;
+  Object? transactionsPageException;
+  Completer<void>? transactionsGate;
+  final List<({String? cursor, List<String>? types})> listTransactionsCalls = [];
 
   @override
   Future<WalletView> getWallet() async {
@@ -101,5 +114,20 @@ class FakeWalletRepository implements WalletRepository {
   Future<void> retryProvision() async {
     retryProvisionCallCount++;
     if (retryProvisionException != null) throw retryProvisionException!;
+  }
+
+  @override
+  Future<LedgerPage> listTransactions({
+    String? cursor,
+    int limit = 50,
+    List<String>? types,
+  }) async {
+    listTransactionsCalls.add((cursor: cursor, types: types));
+    if (cursor == null && listTransactionsException != null) throw listTransactionsException!;
+    if (cursor != null) {
+      if (transactionsGate != null) await transactionsGate!.future;
+      if (transactionsPageException != null) throw transactionsPageException!;
+    }
+    return ledgerPages['${types?.join(',') ?? ''}|${cursor ?? ''}'] ?? const LedgerPage(items: []);
   }
 }
