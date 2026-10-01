@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/orders/data/order_repository.dart';
@@ -262,6 +263,17 @@ void main() {
       await tester.tap(find.text('View order'));
       await tester.pumpAndSettle();
       expect(find.text('Order Placed'), findsOneWidget); // now on /orders/ord_9
+    });
+
+    testWidgets('a failed fetch shows Retry, and Retry loads it', (tester) async {
+      subs.subscriptions = [sub(_d(2))];
+      subs.getException = const ApiException(errorCode: 'X', message: 'down', statusCode: 503);
+      await pump(tester, '/orders/scheduled/sub_1'); // no extra: fetched by id
+      expect(find.text("Couldn't load this delivery."), findsOneWidget);
+      subs.getException = null;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(find.text('SCHEDULED DELIVERY'), findsOneWidget);
     });
 
     testWidgets('refresh after a skip elsewhere says the next delivery changed', (tester) async {

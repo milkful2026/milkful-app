@@ -94,6 +94,7 @@ void main() {
       final entries = <OrderEntry>[
         OrderedEntry(testOrder('ok', deliveryDate: _d(1), amountPaise: 1000)),
         OrderedEntry(testOrder('c', deliveryDate: _d(1), status: OrderStatus.cancelled, amountPaise: 1)),
+        OrderedEntry(testOrder('f', deliveryDate: _d(1), status: OrderStatus.failed, amountPaise: 8)),
         OrderedEntry(testOrder('pf', deliveryDate: _d(1), status: OrderStatus.paymentFailed, amountPaise: 2)),
         OrderedEntry(
           testOrder('cut', deliveryDate: _d(1), status: OrderStatus.needsAttention,
@@ -136,6 +137,18 @@ void main() {
       expect(statusChip(OrderStatus.failed).label, 'Failed');
       final unknown = statusChip(const OrderStatus('OUT_FOR_DELIVERY'));
       expect((unknown.label, unknown.tone, unknown.icon), ('Out For Delivery', ChipTone.neutral, null));
+    });
+
+    test('isAmountStruck: known-not-charged plus legacy FAILED', () {
+      OrderSummary o(OrderStatus s, [String? r]) =>
+          testOrder('x', deliveryDate: _today, status: s, failureReason: r);
+      expect(isAmountStruck(o(OrderStatus.cancelled)), isTrue);
+      expect(isAmountStruck(o(OrderStatus.paymentFailed)), isTrue);
+      expect(isAmountStruck(o(OrderStatus.needsAttention, 'CUTOFF_PASSED')), isTrue);
+      expect(isAmountStruck(o(OrderStatus.failed)), isTrue);
+      expect(isAmountStruck(o(OrderStatus.needsAttention, 'SWEEP_EXHAUSTED')), isFalse);
+      expect(isAmountStruck(o(OrderStatus.confirmed)), isFalse);
+      expect(isAmountStruck(o(OrderStatus.created)), isFalse);
     });
 
     test('isKnownNotCharged truth table', () {

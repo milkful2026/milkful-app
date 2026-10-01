@@ -193,6 +193,38 @@ void main() {
       await cubit.close();
     });
 
+    test('deep-link fetch failure → error; load again → loaded', () async {
+      subs.getException = const ApiException(
+        errorCode: 'SERVICE_UNAVAILABLE',
+        message: 'down',
+        statusCode: 503,
+      );
+      final cubit = build();
+      await cubit.load();
+      expect(cubit.state, isA<ScheduledDeliveryError>());
+      subs.getException = null;
+      await cubit.load();
+      expect(cubit.state, isA<ScheduledDeliveryLoaded>());
+      await cubit.close();
+    });
+
+    test('an unknown subscription (404) → error, not gone', () async {
+      subs.subscriptions = [];
+      final cubit = build();
+      await cubit.load();
+      expect(cubit.state, isA<ScheduledDeliveryError>());
+      await cubit.close();
+    });
+
+    test('refresh failure → error', () async {
+      final cubit = build(initial: entry);
+      await cubit.load();
+      subs.getException = const ApiException(errorCode: 'X', message: 'down');
+      await cubit.refresh();
+      expect(cubit.state, isA<ScheduledDeliveryError>());
+      await cubit.close();
+    });
+
     test('refresh: the orders lookup fails → dateChanged', () async {
       final cubit = build(initial: entry);
       await cubit.load();

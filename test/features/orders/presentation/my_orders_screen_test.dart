@@ -234,4 +234,23 @@ void main() {
     expect(orders.listCursors, contains('c2'));
     expect(find.byKey(Key('orders.group.2026-09-23')), findsOneWidget);
   });
+
+  testWidgets('a FAILED order is struck through and left out of the day total', (tester) async {
+    orders.pages = {
+      null: OrdersPage(
+        items: [
+          testOrder('ok', deliveryDate: _d(1), amountPaise: 45000),
+          testOrder('bad', deliveryDate: _d(1), status: OrderStatus.failed, amountPaise: 12000),
+        ],
+      ),
+    };
+    await pump(tester);
+
+    expect(find.text('₹450 Total'), findsOneWidget);
+    expect(find.text('Failed'), findsOneWidget);
+    final amount = tester.widget<Text>(
+      find.descendant(of: find.byKey(const Key('orders.row.bad')), matching: find.text('₹120')),
+    );
+    expect(amount.style?.decoration, TextDecoration.lineThrough);
+  });
 }
