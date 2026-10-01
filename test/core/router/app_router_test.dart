@@ -14,12 +14,16 @@ import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/onboarding/bloc/registration_bloc.dart';
 import 'package:milkful_app/features/onboarding/data/registration_repository.dart';
+import 'package:milkful_app/features/orders/data/order_repository.dart';
+import 'package:milkful_app/features/orders/presentation/order_detail_screen.dart';
+import 'package:milkful_app/features/orders/presentation/scheduled_delivery_screen.dart';
 import 'package:milkful_app/features/subscriptions/data/subscription_repository.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 import '../../fakes/fake_cart_repository.dart';
 import '../../fakes/fake_catalog_repository.dart';
 import '../../fakes/fake_draft_storage.dart';
+import '../../fakes/fake_order_repository.dart';
 import '../../fakes/fake_pricing_repository.dart';
 import '../../fakes/fake_profile_repository.dart';
 import '../../fakes/fake_registration_repository.dart';
@@ -62,6 +66,7 @@ void main() {
           RepositoryProvider<SubscriptionRepository>.value(
             value: FakeSubscriptionRepository(),
           ),
+          RepositoryProvider<OrderRepository>.value(value: FakeOrderRepository()),
         ],
         child: BlocProvider<AuthBloc>.value(
           value: authBloc,
@@ -164,6 +169,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Cow Milk'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'MA-146: /orders/scheduled/:id resolves to the scheduled view, never to '
+    'OrderDetailScreen("scheduled")',
+    (tester) async {
+      final router = await pumpAuthenticatedRouter(tester);
+
+      router.push('/orders/scheduled/sub_1');
+      await tester.pumpAndSettle();
+      expect(find.byType(ScheduledDeliveryScreen), findsOneWidget);
+      expect(find.byType(OrderDetailScreen), findsNothing);
+
+      router.push('/orders/ord_1');
+      await tester.pumpAndSettle();
+      expect(find.byType(OrderDetailScreen), findsOneWidget);
     },
   );
 }

@@ -15,6 +15,11 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/address_screen.dart';
 import '../../features/onboarding/presentation/otp_screen.dart';
 import '../../features/onboarding/presentation/welcome_screen.dart';
+import '../../features/orders/models/order_entry.dart';
+import '../../features/orders/presentation/my_orders_screen.dart';
+import '../../features/orders/presentation/order_detail_screen.dart';
+import '../../features/orders/presentation/scheduled_delivery_screen.dart';
+import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/subscriptions/presentation/subscriptions_screen.dart';
 import '../../features/wallet/presentation/wallet_coming_soon.dart';
 import '../../features/wallet/presentation/wallet_screen.dart';
@@ -121,6 +126,8 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
       // `/wallet` — no feature flag (unlike `/wallet`'s `walletEnabled`),
       // ships live once merged per MA-133 §4 FR-1's own decision.
       GoRoute(path: '/subscriptions', builder: (context, state) => const SubscriptionsScreen()),
+      // MA-147. The Profile tab's destination (was a stub on every bar).
+      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       // MA-137 FR-10. Reached with `go` from Review Cart once a checkout
       // completes; a deep link or restored route has no `extra` to show,
       // so it falls back to Home rather than crashing.
@@ -131,6 +138,23 @@ GoRouter buildAppRouter(AuthBloc authBloc) {
           if (args is! OrderSuccessArgs) return const HomeScreen();
           return OrderSuccessScreen(args: args);
         },
+      ),
+      // MA-145. Pushed from Profile's My Orders row (MA-147).
+      GoRoute(path: '/orders', builder: (context, state) => const MyOrdersScreen()),
+      // MA-146. Declared before `/orders/:orderId` so "scheduled" is never
+      // read as an order id. `extra` is the list's ScheduledEntry; a deep
+      // link or restart has none, and the screen fetches by id instead.
+      GoRoute(
+        path: '/orders/scheduled/:subscriptionId',
+        builder: (context, state) => ScheduledDeliveryScreen(
+          subscriptionId: state.pathParameters['subscriptionId']!,
+          entry: state.extra is ScheduledEntry ? state.extra as ScheduledEntry : null,
+        ),
+      ),
+      GoRoute(
+        path: '/orders/:orderId',
+        builder: (context, state) =>
+            OrderDetailScreen(orderId: state.pathParameters['orderId']!),
       ),
     ],
   );

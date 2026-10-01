@@ -139,6 +139,9 @@ class _FakeSubscriptionRepository implements SubscriptionRepository {
   Future<List<SubscriptionView>> list() async => const [];
 
   @override
+  Future<SubscriptionView> get(String id) async => throw UnimplementedError('preview only');
+
+  @override
   Future<SubscriptionView> create({
     required String productId,
     required int quantity,
