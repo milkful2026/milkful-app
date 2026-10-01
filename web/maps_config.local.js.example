@@ -1,0 +1,22 @@
+// google_maps_flutter_web (0.6.x) requires the Google Maps JavaScript API to
+// be loaded via a synchronous <script> tag in web/index.html's <head> before
+// Flutter's own bootstrap runs — see
+// https://pub.dev/packages/google_maps_flutter_web#setup. Without it, the
+// GoogleMap widget throws as soon as it builds (shows as Flutter's red error
+// screen where the map should be).
+//
+// Copy this file to web/maps_config.local.js (already gitignored, per
+// web/.gitignore) and fill in your own key below. This is the browser-side
+// counterpart to android/local.properties' MAPS_API_KEY and
+// ios/Runner/ApiKeys.xcconfig's GOOGLE_MAPS_API_KEY — get one at
+// https://developers.google.com/maps/documentation/javascript/get-api-key
+// and restrict it (Google Cloud Console > Credentials) to your dev origins
+// (e.g. http://localhost:*), since anything shipped to a browser is public
+// regardless of restriction.
+//
+// document.write here (rather than appendChild) keeps this synchronous, so
+// the Maps script tag lands in the parse stream before Flutter's own script
+// runs — an async-injected tag would race the GoogleMap widget's first build.
+document.write(
+  '<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE"><\/script>'
+);

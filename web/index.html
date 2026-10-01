@@ -31,6 +31,12 @@
 
   <title>milkful_app</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Google Maps JS SDK bootstrap for google_maps_flutter_web — see
+       web/maps_config.local.js.example for setup (gitignored per-dev file,
+       not committed). Missing locally? This 404s harmlessly; the GoogleMap
+       widget then throws its own clear error instead of silently no-op'ing. -->
+  <script src="maps_config.local.js"></script>
 </head>
 <body>
   <!--

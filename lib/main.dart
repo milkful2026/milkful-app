@@ -82,8 +82,21 @@ class MilkfulApp extends StatelessWidget {
     // A separate, plain Dio — Google's Places/Geocoding APIs use their own
     // response envelope, not this app's backend's, so they don't go through
     // ApiClient (which would try to unwrap {requestId,status,data}) or carry
-    // this app's own Authorization header.
-    final placesRepository = GooglePlacesRepository(Dio());
+    // this app's own Authorization header. Still needs its own timeout
+    // (matching ApiClient's) though: address_screen.dart's reverse-geocode
+    // fires automatically as soon as the map settles (onCameraIdle) and sets
+    // _resolving = true around this call — an unreachable Places API with no
+    // timeout leaves that stuck true forever, silently disabling Confirm
+    // Location with no error shown (unlike the bloc's own `checking` state,
+    // _resolving has no error UI of its own).
+    final placesRepository = GooglePlacesRepository(
+      Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      ),
+    );
 
     final authBloc = AuthBloc(
       authRepository: authRepository,

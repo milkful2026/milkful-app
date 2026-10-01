@@ -1,0 +1,5 @@
+# Google Maps JS API key for local web dev — the browser-side counterpart to
+# android/local.properties' MAPS_API_KEY and ios/Runner/ApiKeys.xcconfig's
+# GOOGLE_MAPS_API_KEY. Copy maps_config.local.js.example to maps_config.local.js
+# and fill in your own key; never commit the real key.
+maps_config.local.js
