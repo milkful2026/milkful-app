@@ -9,12 +9,10 @@ import 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc({
-    required AuthRepository authRepository,
+    required this._authRepository,
     required SecureTokenStorage tokenStorage,
-    required ProfileRepository profileRepository,
-  })  : _authRepository = authRepository,
-        _tokenStorage = tokenStorage,
-        _profileRepository = profileRepository,
+    required this._profileRepository,
+  })  : _tokenStorage = tokenStorage,
         super(const AuthInitial()) {
     on<OtpSendRequested>(_onOtpSendRequested);
     on<OtpResendRequested>(_onOtpSendRequested);
@@ -176,8 +174,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         refreshToken: tokens.refreshToken,
         accessTokenExpiresAt: tokens.expiresAt,
       );
-      final profile = await _resolveProfile();
-      emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+      try {
+        final profile = await _resolveProfile();
+        emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+      } on ApiException {
+        // _resolveProfile only ever rethrows ApiException for
+        // USER_NOT_FOUND (everything else it degrades internally) — tokens
+        // are already valid and saved here, so this must not fall through
+        // to the outer catch below, which would wrongly report OTP
+        // verification itself as failed. See AuthNeedsRegistration's doc
+        // comment.
+        emit(const AuthNeedsRegistration());
+      }
     } on ApiException catch (e) {
       emit(
         AuthOtpVerifyFailure(
@@ -237,8 +245,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
     }
-    final profile = await _resolveProfile();
-    emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+    try {
+      final profile = await _resolveProfile();
+      emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+    } on ApiException {
+      // Same USER_NOT_FOUND case as _onLoginOtpVerifyRequested — a stored
+      // session that's valid but was never actually registered. See
+      // AuthNeedsRegistration's doc comment.
+      emit(const AuthNeedsRegistration());
+    }
   }
 
   Future<void> _onLogoutRequested(LogoutRequested event, Emitter<AuthState> emit) async {
@@ -266,17 +281,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     if (state is! AuthAuthenticated) return;
-    final profile = await _resolveProfile();
-    emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+    try {
+      final profile = await _resolveProfile();
+      emit(AuthAuthenticated(accountType: profile.accountType, name: profile.name));
+    } on ApiException {
+      // Dispatched right after registration's own POST /users/register
+      // just succeeded, so a USER_NOT_FOUND here would only ever mean
+      // read-after-write lag, never an actually-unfinished registration —
+      // degrade like any other transient failure (FR-4) instead of
+      // bouncing the user who just finished the wizard back into it.
+      emit(const AuthAuthenticated());
+    }
   }
 
-  /// FR-4: a failed profile lookup must never block reaching Home —
-  /// returns nulls (degrades to a B2C-equivalent, name-less view) instead
-  /// of propagating.
+  /// FR-4 (generic case): a failed profile lookup must never block reaching
+  /// Home — degrades to a B2C-equivalent, name-less view instead of
+  /// propagating. `USER_NOT_FOUND` is the one exception: it means this
+  /// identity was never actually registered, not a transient failure, so
+  /// it's rethrown instead of swallowed — see [AuthNeedsRegistration] for
+  /// why that distinction matters and which callers act on it.
   Future<({String? accountType, String? name})> _resolveProfile() async {
     try {
       final profile = await _profileRepository.getMe();
       return (accountType: profile.accountType, name: profile.name);
+    } on ApiException catch (e) {
+      if (e.errorCode == 'USER_NOT_FOUND') rethrow;
+      return (accountType: null, name: null);
     } catch (_) {
       return (accountType: null, name: null);
     }

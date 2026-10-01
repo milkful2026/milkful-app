@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:milkful_app/core/network/api_client.dart';
 import 'package:milkful_app/core/router/app_router.dart';
 import 'package:milkful_app/features/auth/bloc/auth_bloc.dart';
 import 'package:milkful_app/features/auth/bloc/auth_event.dart';
@@ -123,6 +124,69 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(router.state.matchedLocation, '/login');
+    },
+  );
+
+  testWidgets(
+    'a valid session with no Postgres profile (AuthNeedsRegistration) landing '
+    'on / is redirected to /address, not /home',
+    (tester) async {
+      final tokenStorage = FakeSecureTokenStorage()
+        ..refreshToken = 'stored-refresh'
+        ..accessToken = 'stored-access'
+        ..accessTokenExpiresAt = DateTime.now().add(const Duration(hours: 1));
+      authBloc = AuthBloc(
+        authRepository: FakeAuthRepository(),
+        tokenStorage: tokenStorage,
+        profileRepository: FakeProfileRepository(
+          getMeException: const ApiException(
+            errorCode: 'USER_NOT_FOUND',
+            message: 'No profile found for this account',
+          ),
+        ),
+      );
+      addTearDown(() => authBloc.close());
+      authBloc.add(const SessionBootstrapRequested());
+      await authBloc.stream.firstWhere((s) => s is AuthNeedsRegistration);
+
+      final router = buildAppRouter(authBloc);
+      await tester.pumpWidget(wrapRouter(router, authBloc));
+      await tester.pumpAndSettle();
+
+      expect(router.state.matchedLocation, '/address');
+    },
+  );
+
+  testWidgets(
+    'AuthNeedsRegistration navigating straight to /home is redirected back to '
+    '/address — never left on a Home screen with no profile',
+    (tester) async {
+      final tokenStorage = FakeSecureTokenStorage()
+        ..refreshToken = 'stored-refresh'
+        ..accessToken = 'stored-access'
+        ..accessTokenExpiresAt = DateTime.now().add(const Duration(hours: 1));
+      authBloc = AuthBloc(
+        authRepository: FakeAuthRepository(),
+        tokenStorage: tokenStorage,
+        profileRepository: FakeProfileRepository(
+          getMeException: const ApiException(
+            errorCode: 'USER_NOT_FOUND',
+            message: 'No profile found for this account',
+          ),
+        ),
+      );
+      addTearDown(() => authBloc.close());
+      authBloc.add(const SessionBootstrapRequested());
+      await authBloc.stream.firstWhere((s) => s is AuthNeedsRegistration);
+
+      final router = buildAppRouter(authBloc);
+      await tester.pumpWidget(wrapRouter(router, authBloc));
+      await tester.pumpAndSettle();
+
+      router.go('/home');
+      await tester.pumpAndSettle();
+
+      expect(router.state.matchedLocation, '/address');
     },
   );
 
