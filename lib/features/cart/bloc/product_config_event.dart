@@ -75,3 +75,12 @@ class SlotSelected extends ProductConfigEvent {
 class QuoteRequested extends ProductConfigEvent {
   const QuoteRequested();
 }
+
+/// Fired by the screen's `RefreshIndicator` (the "pull to retry" the
+/// delivery-address/price/wallet error messages promise). Unlike
+/// [ProductConfigStarted], this must not reset the customer's in-progress
+/// selection (frequency/quantity/start date) — it only re-resolves the
+/// delivery state/zone and re-runs whatever depends on it.
+class RetryRequested extends ProductConfigEvent {
+  const RetryRequested();
+}

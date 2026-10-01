@@ -40,6 +40,7 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     on<QuantityChanged>(_onQuantityChanged);
     on<SlotSelected>(_onSlotSelected);
     on<AddToCartRequested>(_onAddToCartRequested);
+    on<RetryRequested>(_onRetryRequested);
     // restartable(): a frequency change racing a quantity change (or two
     // rapid quantity changes) must only ever apply the latest quote result
     // — see the MA-120 PR #7 review finding this resolves. One shared
@@ -82,7 +83,10 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     // QuoteRequested fires below, otherwise whether that first quote sees
     // a real state or `null` would depend on unpredictable microtask
     // ordering rather than being deterministic.
-    await Future.wait([_resolveDeliveryState(), _refreshStaleStock(event.product, emit)]);
+    await Future.wait([
+      _resolveDeliveryState(),
+      _refreshStaleStock(event.product, emit),
+    ]);
 
     add(const QuoteRequested());
     if (state.frequency.isSubscription) {
@@ -93,7 +97,10 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
   /// MA-120 §9 — the `Product` from route `extra:` seeds the initial
   /// render only. A failure here is non-fatal: the screen simply keeps
   /// showing the seeded product rather than blocking.
-  Future<void> _refreshStaleStock(Product seeded, Emitter<ProductConfigState> emit) async {
+  Future<void> _refreshStaleStock(
+    Product seeded,
+    Emitter<ProductConfigState> emit,
+  ) async {
     try {
       final fresh = await _catalogRepository.getProduct(seeded.id);
       if (isClosed) return;
@@ -119,16 +126,29 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
   /// default selection — the chip row simply doesn't render and Subscribe
   /// Now stays disabled via [ProductConfigState.slotGateBlocks], the same
   /// fail-closed posture MA-133 §11 specifies for an empty response too.
+  ///
+  /// Called via `unawaited(...)` from `_onFrequencyChanged` and
+  /// `_onRetryRequested`, both of which may complete (marking [emit] done)
+  /// before this finishes — see [_checkWalletBalance]'s doc comment on why
+  /// every emit below checks `emit.isDone` first.
   Future<void> _fetchSlots(Emitter<ProductConfigState> emit) async {
     final zoneId = _zoneId;
     if (zoneId == null) {
-      emit(state.copyWith(slotsStatus: SlotsStatus.notApplicable, slots: const [], clearSlotId: true));
+      if (emit.isDone) return;
+      emit(
+        state.copyWith(
+          slotsStatus: SlotsStatus.notApplicable,
+          slots: const [],
+          clearSlotId: true,
+        ),
+      );
       return;
     }
+    if (emit.isDone) return;
     emit(state.copyWith(slotsStatus: SlotsStatus.loading));
     try {
       final slots = await _registrationRepository.getDeliverySlots(zoneId);
-      if (isClosed) return;
+      if (isClosed || emit.isDone) return;
       final firstAvailable = slots.firstAvailableId;
       emit(
         state.copyWith(
@@ -139,12 +159,21 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
         ),
       );
     } catch (_) {
-      if (isClosed) return;
-      emit(state.copyWith(slotsStatus: SlotsStatus.failed, slots: const [], clearSlotId: true));
+      if (isClosed || emit.isDone) return;
+      emit(
+        state.copyWith(
+          slotsStatus: SlotsStatus.failed,
+          slots: const [],
+          clearSlotId: true,
+        ),
+      );
     }
   }
 
-  Future<void> _onSlotSelected(SlotSelected event, Emitter<ProductConfigState> emit) async {
+  Future<void> _onSlotSelected(
+    SlotSelected event,
+    Emitter<ProductConfigState> emit,
+  ) async {
     emit(state.copyWith(slotId: event.slotId));
   }
 
@@ -226,10 +255,34 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
     }
   }
 
+  /// Handles the screen's `RefreshIndicator` ("pull to retry"). Re-resolves
+  /// [_deliveryState]/[_zoneId] — the thing every "pull to retry" message on
+  /// this screen is actually asking to retry — and re-runs whatever depends
+  /// on it, without resetting the customer's current
+  /// frequency/quantity/start-date selection the way [ProductConfigStarted]
+  /// would.
+  Future<void> _onRetryRequested(
+    RetryRequested event,
+    Emitter<ProductConfigState> emit,
+  ) async {
+    await _resolveDeliveryState();
+    add(const QuoteRequested());
+    if (state.frequency.isSubscription) {
+      unawaited(_checkWalletBalance(emit));
+      unawaited(_fetchSlots(emit));
+    }
+  }
+
+  /// Called via `unawaited(...)` from three handlers (`_onStarted`,
+  /// `_onFrequencyChanged`, `_onRetryRequested`) so the wallet check runs
+  /// concurrently rather than blocking the handler's own completion — which
+  /// means the owning handler can complete (marking its [emit] done) before
+  /// this finishes. Every emit below must check `emit.isDone` first, per
+  /// bloc's own guidance for detached async work sharing an [Emitter].
   Future<void> _checkWalletBalance(Emitter<ProductConfigState> emit) async {
     try {
       final balance = await _walletBalanceRepository.getBalance();
-      if (isClosed) return;
+      if (isClosed || emit.isDone) return;
       emit(
         state.copyWith(
           walletCheckStatus: balance >= kSubscriptionMinWalletBalanceRupees
@@ -239,7 +292,7 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
         ),
       );
     } on ApiException catch (e) {
-      if (isClosed) return;
+      if (isClosed || emit.isDone) return;
       emit(
         state.copyWith(
           walletCheckStatus: WalletCheckStatus.failed,
@@ -247,7 +300,7 @@ class ProductConfigBloc extends Bloc<ProductConfigEvent, ProductConfigState> {
         ),
       );
     } catch (_) {
-      if (isClosed) return;
+      if (isClosed || emit.isDone) return;
       emit(state.copyWith(walletCheckStatus: WalletCheckStatus.failed));
     }
   }
