@@ -2,10 +2,14 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/id_generator.dart';
+import '../../cart/data/cart_repository.dart';
+import '../../cart/models/frequency.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
 import '../data/order_repository.dart';
 import '../models/order_summary.dart';
+import '../presentation/widgets/product_thumb.dart';
 
 sealed class OrderDetailState extends Equatable {
   const OrderDetailState();
@@ -19,15 +23,21 @@ class OrderDetailLoading extends OrderDetailState {
 }
 
 class OrderDetailLoaded extends OrderDetailState {
-  const OrderDetailLoaded(this.order, this.products);
+  const OrderDetailLoaded(this.order, this.products, {this.reordering = false});
 
   final OrderSummary order;
 
   /// A key mapped to null means the lookup failed (render "Item").
   final Map<String, Product?> products;
 
+  /// MA-152 FR-1 — a Reorder is in flight (its button is disabled).
+  final bool reordering;
+
+  OrderDetailLoaded copyWith({bool? reordering}) =>
+      OrderDetailLoaded(order, products, reordering: reordering ?? this.reordering);
+
   @override
-  List<Object?> get props => [order, products];
+  List<Object?> get props => [order, products, reordering];
 }
 
 /// `404 ORDER_NOT_FOUND` — unknown, or another user's (never leaked).
@@ -39,18 +49,41 @@ class OrderDetailError extends OrderDetailState {
   const OrderDetailError();
 }
 
+/// MA-152 FR-1 — what a Reorder achieved; [message] is the SnackBar copy.
+class ReorderResult {
+  const ReorderResult({required this.added, required this.total, required this.failedNames});
+
+  final int added;
+  final int total;
+
+  /// Product names of the lines that failed, in order-line order.
+  final List<String> failedNames;
+
+  String get message {
+    if (added == 0) return "Couldn't add items to cart. Try again.";
+    if (failedNames.isEmpty) return 'Added $total item${total == 1 ? '' : 's'} to cart';
+    return "Added $added of $total items to cart. Couldn't add ${failedNames.join(', ')}.";
+  }
+
+  /// Even a partial success put something in the cart.
+  bool get showViewCart => added > 0;
+}
+
 /// MA-146 FR-2 — one order from `GET /orders/{id}`, plus product details.
 class OrderDetailCubit extends Cubit<OrderDetailState> {
   OrderDetailCubit({
     required OrderRepository orderRepository,
     required CatalogRepository catalogRepository,
+    required CartRepository cartRepository,
     required this.orderId,
   }) : _orders = orderRepository,
        _catalog = catalogRepository,
+       _cart = cartRepository,
        super(const OrderDetailLoading());
 
   final OrderRepository _orders;
   final CatalogRepository _catalog;
+  final CartRepository _cart;
   final String orderId;
 
   /// Shows the skeleton; used on open and after an error.
@@ -71,7 +104,14 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
         _catalog,
         order.items.map((i) => i.productId).toSet(),
       );
-      if (!isClosed) emit(OrderDetailLoaded(order, products));
+      if (!isClosed) {
+        // A refresh mid-Reorder keeps the button disabled until it ends.
+        final reordering = switch (state) {
+          OrderDetailLoaded(:final reordering) => reordering,
+          _ => false,
+        };
+        emit(OrderDetailLoaded(order, products, reordering: reordering));
+      }
       return true;
     } on ApiException catch (e) {
       final notFound = e.statusCode == 404 || e.errorCode == 'ORDER_NOT_FOUND';
@@ -85,6 +125,36 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
       _fail(keepContentOnError);
       return false;
     }
+  }
+
+  /// MA-152 FR-1 — re-adds every line as a one-time cart item. Null (and
+  /// no calls) unless loaded and not already reordering.
+  ///
+  /// Lines are added one at a time, not with `Future.wait` as the spec
+  /// suggests: each Cart Service add is a DynamoDB transaction on the cart's
+  /// shared META row, so concurrent adds to one cart conflict and fail.
+  Future<ReorderResult?> reorder() async {
+    final current = state;
+    if (current is! OrderDetailLoaded || current.reordering) return null;
+    emit(current.copyWith(reordering: true));
+    final failed = <String>[];
+    for (final line in current.order.items) {
+      try {
+        // No startDate/slotId: Cart Service rejects them on a ONE_TIME line.
+        await _cart.addItem(
+          productId: line.productId,
+          quantity: line.quantity,
+          frequency: Frequency.oneTime,
+          idempotencyKey: newHexId(),
+        );
+      } catch (_) {
+        failed.add(productNameFor(current.products, line.productId));
+      }
+    }
+    final now = state;
+    if (!isClosed && now is OrderDetailLoaded) emit(now.copyWith(reordering: false));
+    final total = current.order.items.length;
+    return ReorderResult(added: total - failed.length, total: total, failedNames: failed);
   }
 
   void _fail(bool keepContent) {

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/utils/money.dart';
+import '../../cart/data/cart_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../bloc/order_detail_cubit.dart';
 import '../data/order_repository.dart';
@@ -11,9 +15,9 @@ import 'order_formatting.dart';
 import 'widgets/detail_cards.dart';
 import 'widgets/product_thumb.dart';
 
-/// MA-146 — `/orders/:orderId`: the read-only subset of `order_details_inr`
-/// that real data backs today. No invoice, re-order, support or feedback
-/// (MA-35 / MA-38 / MA-28).
+/// MA-146 — `/orders/:orderId`: the subset of `order_details_inr` that real
+/// data backs today, plus Reorder and Support (MA-152). No invoice or
+/// feedback (MA-38 / MA-28).
 class OrderDetailScreen extends StatelessWidget {
   const OrderDetailScreen({super.key, required this.orderId});
 
@@ -30,12 +34,58 @@ class OrderDetailScreen extends StatelessWidget {
     }
   }
 
+  /// MA-152 FR-1 — the result SnackBar, with "View Cart" if anything landed.
+  Future<void> _reorder(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final result = await context.read<OrderDetailCubit>().reorder();
+    if (result == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        action: result.showViewCart
+            ? SnackBarAction(label: 'View Cart', onPressed: () => router.push('/cart'))
+            : null,
+      ),
+    );
+  }
+
+  /// MA-152 FR-2 — the mail app, with the display ID (no `#`, never the full
+  /// order ID) in the subject.
+  Future<void> _openSupport(BuildContext context, String orderId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final subject = 'Order ${displayOrderId(orderId).substring(1)}';
+    // Built by hand so a space is `%20`: Uri.queryParameters would use `+`,
+    // which some mail apps show literally.
+    final uri = Uri(
+      scheme: 'mailto',
+      path: AppConfig.supportEmail,
+      query: 'subject=${Uri.encodeComponent(subject)}',
+    );
+    // A mail app that's found but won't open (false or a throw) gets the same
+    // fallback as no mail app at all.
+    var launched = false;
+    try {
+      launched = await canLaunchUrl(uri) && await launchUrl(uri);
+    } catch (_) {
+      launched = false;
+    }
+    if (!launched) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No email app found. Contact us at ${AppConfig.supportEmail}.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => OrderDetailCubit(
         orderRepository: context.read<OrderRepository>(),
         catalogRepository: context.read<CatalogRepository>(),
+        cartRepository: context.read<CartRepository>(),
         orderId: orderId,
       )..load(),
       child: Scaffold(
@@ -54,7 +104,7 @@ class OrderDetailScreen extends StatelessWidget {
               buttonLabel: 'Retry',
               onPressed: () => context.read<OrderDetailCubit>().load(),
             ),
-            OrderDetailLoaded(:final order, :final products) => RefreshIndicator(
+            OrderDetailLoaded(:final order, :final products, :final reordering) => RefreshIndicator(
               onRefresh: () => _refresh(context),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -106,6 +156,40 @@ class OrderDetailScreen extends StatelessWidget {
                     child: IconLine(
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Milkful Wallet',
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The spinner replaces the label, so a screen reader
+                        // still hears the button's name while it's busy.
+                        Semantics(
+                          button: true,
+                          enabled: !reordering,
+                          label: 'Reorder Items',
+                          excludeSemantics: reordering,
+                          child: FilledButton(
+                            key: const Key('orderDetail.reorder'),
+                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                            onPressed: reordering ? null : () => _reorder(context),
+                            child: reordering
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text('Reorder Items'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          key: const Key('orderDetail.support'),
+                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                          onPressed: () => _openSupport(context, order.orderId),
+                          child: const Text('Support'),
+                        ),
+                      ],
                     ),
                   ),
                 ],
