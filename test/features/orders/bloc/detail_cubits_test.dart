@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:milkful_app/core/network/api_client.dart';
+import 'package:milkful_app/features/cart/models/frequency.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/orders/bloc/order_detail_cubit.dart';
 import 'package:milkful_app/features/orders/bloc/scheduled_delivery_cubit.dart';
@@ -10,6 +13,7 @@ import 'package:milkful_app/features/subscriptions/models/schedule.dart';
 import 'package:milkful_app/features/subscriptions/models/subscription_status.dart';
 import 'package:milkful_app/features/subscriptions/models/subscription_view.dart';
 
+import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_order_repository.dart';
 import '../../../fakes/fake_subscription_repository.dart';
@@ -42,14 +46,138 @@ void main() {
   group('OrderDetailCubit', () {
     late FakeOrderRepository orders;
     late FakeCatalogRepository catalog;
+    late FakeCartRepository cart;
 
     setUp(() {
-      orders = FakeOrderRepository(byId: {'ord_1': testOrder('ord_1', deliveryDate: _d(1))});
-      catalog = FakeCatalogRepository(productsById: {'cow-milk': _milk});
+      orders = FakeOrderRepository(
+        byId: {
+          'ord_1': testOrder('ord_1', deliveryDate: _d(1)),
+          'ord_2': testOrder(
+            'ord_2',
+            deliveryDate: _d(1),
+            items: const [
+              OrderItem(productId: 'cow-milk', quantity: 2),
+              OrderItem(productId: 'curd', quantity: 1),
+            ],
+          ),
+        },
+      );
+      catalog = FakeCatalogRepository(
+        productsById: {
+          'cow-milk': _milk,
+          'curd': const Product(
+            id: 'curd',
+            categoryId: 'milk',
+            name: 'Fresh Curd',
+            description: '',
+            unit: '500g',
+            price: 40,
+            stockState: StockState.inStock,
+          ),
+        },
+      );
+      cart = FakeCartRepository();
     });
 
-    OrderDetailCubit build(String id) =>
-        OrderDetailCubit(orderRepository: orders, catalogRepository: catalog, orderId: id);
+    OrderDetailCubit build(String id) => OrderDetailCubit(
+      orderRepository: orders,
+      catalogRepository: catalog,
+      cartRepository: cart,
+      orderId: id,
+    );
+
+    Future<OrderDetailCubit> loaded(String id) async {
+      final cubit = build(id);
+      await cubit.load();
+      expect(cubit.state, isA<OrderDetailLoaded>());
+      return cubit;
+    }
+
+    const conflict = ApiException(errorCode: 'OUT_OF_STOCK', message: 'gone', statusCode: 409);
+
+    test('reorder: every line added as a one-time item, each with its own key', () async {
+      final cubit = await loaded('ord_2');
+      final result = (await cubit.reorder())!;
+      expect((result.added, result.total), (2, 2));
+      expect(result.failedNames, isEmpty);
+      expect(result.message, 'Added 2 items to cart');
+      expect(result.showViewCart, isTrue);
+      expect(cart.requests.map((r) => (r.productId, r.quantity)), [('cow-milk', 2), ('curd', 1)]);
+      for (final r in cart.requests) {
+        expect(r.frequency, Frequency.oneTime);
+        expect(r.startDate, isNull);
+        expect(r.slotId, isNull);
+      }
+      expect(cart.requests[0].idempotencyKey, isNot(cart.requests[1].idempotencyKey));
+      expect((cubit.state as OrderDetailLoaded).reordering, isFalse);
+      await cubit.close();
+    });
+
+    test('reorder: one line → singular copy', () async {
+      final cubit = await loaded('ord_1');
+      expect((await cubit.reorder())!.message, 'Added 1 item to cart');
+      await cubit.close();
+    });
+
+    test('reorder: a partial failure names the failed product', () async {
+      cart.addItemExceptionsByProduct['curd'] = conflict;
+      final cubit = await loaded('ord_2');
+      final result = (await cubit.reorder())!;
+      expect(result.failedNames, ['Fresh Curd']);
+      expect(result.message, "Added 1 of 2 items to cart. Couldn't add Fresh Curd.");
+      expect(result.showViewCart, isTrue);
+      await cubit.close();
+    });
+
+    test('reorder: an unresolved product fails as "Item"; a non-API error still counts', () async {
+      catalog.productsById.remove('curd');
+      cart.addItemExceptionsByProduct['cow-milk'] = TimeoutException('slow');
+      cart.addItemExceptionsByProduct['curd'] = conflict;
+      final cubit = await loaded('ord_2');
+      final result = (await cubit.reorder())!;
+      expect(cart.requests, hasLength(2)); // the second line is still attempted
+      expect(result.failedNames, ['Cow Milk', 'Item']);
+      expect(result.added, 0);
+      expect(result.message, "Couldn't add items to cart. Try again.");
+      expect(result.showViewCart, isFalse);
+      await cubit.close();
+    });
+
+    test('reorder: sequential, and a second call while in flight is a no-op', () async {
+      cart.addItemGate = Completer<void>();
+      final cubit = await loaded('ord_2');
+      final first = cubit.reorder();
+      await Future<void>.delayed(Duration.zero);
+      expect(cart.requests, hasLength(1)); // not fanned out in parallel
+      expect((cubit.state as OrderDetailLoaded).reordering, isTrue);
+      expect(await cubit.reorder(), isNull);
+      cart.addItemGate!.complete();
+      expect((await first)!.added, 2);
+      expect(cart.requests, hasLength(2));
+      expect((cubit.state as OrderDetailLoaded).reordering, isFalse);
+      await cubit.close();
+    });
+
+    test('reorder: a refresh mid-reorder keeps the button disabled until it ends', () async {
+      cart.addItemGate = Completer<void>();
+      final cubit = await loaded('ord_2');
+      final pending = cubit.reorder();
+      await Future<void>.delayed(Duration.zero);
+      expect(await cubit.refresh(), isTrue);
+      expect((cubit.state as OrderDetailLoaded).reordering, isTrue);
+      cart.addItemGate!.complete();
+      await pending;
+      expect((cubit.state as OrderDetailLoaded).reordering, isFalse);
+      await cubit.close();
+    });
+
+    test('reorder: nothing to do unless loaded', () async {
+      final cubit = build('ord_missing');
+      await cubit.load();
+      expect(await cubit.reorder(), isNull);
+      expect(cart.requests, isEmpty);
+      await cubit.close();
+    });
 
     test('loads the order and its products', () async {
       final cubit = build('ord_1');

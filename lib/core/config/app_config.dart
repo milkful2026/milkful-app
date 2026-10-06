@@ -84,6 +84,14 @@ class AppConfig {
   /// deployed somewhere this build can reach — see MA-125 §11.
   static const walletEnabled = bool.fromEnvironment('WALLET_ENABLED');
 
+  /// Order Detail's Support action (MA-152 FR-2). A PLACEHOLDER pending
+  /// Product/Support sign-off (MA-152 Open Questions) — override per build
+  /// with `--dart-define=SUPPORT_EMAIL=…` once the real address is confirmed.
+  static const supportEmail = String.fromEnvironment(
+    'SUPPORT_EMAIL',
+    defaultValue: 'support@milkful.app',
+  );
+
   /// Subscription Service (MA-131, `services/subscription`) — real,
   /// Aurora-backed. No feature flag (unlike [walletEnabled]) — ships live
   /// once merged, per MA-133 §4 FR-1's own decision (no external gateway

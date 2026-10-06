@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/cart/models/cart_line_item.dart';
 import 'package:milkful_app/features/cart/models/cart_view.dart';
@@ -39,6 +41,12 @@ class FakeCartRepository implements CartRepository {
   });
 
   Object? addItemException;
+
+  /// Per-product `addItem` failures, checked before [addItemException].
+  final Map<String, Object> addItemExceptionsByProduct = {};
+
+  /// Holds every `addItem` call open (after it's logged) until completed.
+  Completer<void>? addItemGate;
   CartView? getCartResult;
   Object? getCartException;
   CartView? updateItemResult;
@@ -76,6 +84,9 @@ class FakeCartRepository implements CartRepository {
         slotId: slotId,
       ),
     );
+    if (addItemGate != null) await addItemGate!.future;
+    final byProduct = addItemExceptionsByProduct[productId];
+    if (byProduct != null) throw byProduct;
     if (addItemException != null) throw addItemException!;
   }
 

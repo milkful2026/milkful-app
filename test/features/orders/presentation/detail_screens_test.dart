@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:milkful_app/core/network/api_client.dart';
+import 'package:milkful_app/features/cart/data/cart_repository.dart';
 import 'package:milkful_app/features/catalog/data/catalog_repository.dart';
 import 'package:milkful_app/features/catalog/models/product.dart';
 import 'package:milkful_app/features/orders/data/order_repository.dart';
@@ -16,7 +19,11 @@ import 'package:milkful_app/features/subscriptions/data/subscription_repository.
 import 'package:milkful_app/features/subscriptions/models/schedule.dart';
 import 'package:milkful_app/features/subscriptions/models/subscription_status.dart';
 import 'package:milkful_app/features/subscriptions/models/subscription_view.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
+import '../../../fakes/fake_cart_repository.dart';
 import '../../../fakes/fake_catalog_repository.dart';
 import '../../../fakes/fake_order_repository.dart';
 import '../../../fakes/fake_subscription_repository.dart';
@@ -37,13 +44,36 @@ Product _p(String id, String name, double price) => Product(
   stockState: StockState.inStock,
 );
 
+/// MA-152 FR-2 — records `mailto:` launches instead of opening a mail app.
+class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+  bool canLaunchResult = true;
+  final List<String> launched = [];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => canLaunchResult;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launched.add(url);
+    return true;
+  }
+}
+
 void main() {
   late FakeOrderRepository orders;
   late FakeSubscriptionRepository subs;
   late FakeCatalogRepository catalog;
+  late FakeCartRepository cart;
+  late _FakeUrlLauncher launcher;
   late List<String> visited;
 
   setUp(() {
+    cart = FakeCartRepository();
+    launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
     orders = FakeOrderRepository();
     subs = FakeSubscriptionRepository();
     catalog = FakeCatalogRepository(
@@ -79,6 +109,7 @@ void main() {
         GoRoute(path: '/start', builder: (_, s) => stub(s)),
         GoRoute(path: '/subscriptions', builder: (_, s) => stub(s)),
         GoRoute(path: '/orders', builder: (_, s) => stub(s)),
+        GoRoute(path: '/cart', builder: (_, s) => stub(s)),
         GoRoute(
           path: '/orders/scheduled/:id',
           builder: (_, s) => ScheduledDeliveryScreen(
@@ -99,6 +130,7 @@ void main() {
           RepositoryProvider<OrderRepository>.value(value: orders),
           RepositoryProvider<SubscriptionRepository>.value(value: subs),
           RepositoryProvider<CatalogRepository>.value(value: catalog),
+          RepositoryProvider<CartRepository>.value(value: cart),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -138,9 +170,108 @@ void main() {
       expect(find.text('Delivery date'), findsOneWidget);
       expect(find.text('Sat, 3 Oct 2026'), findsOneWidget);
       expect(find.text('Milkful Wallet'), findsOneWidget);
-      for (final absent in ['Delivered', 'Download Invoice', 'Reorder Items', 'Leave Feedback']) {
+      for (final absent in ['Delivered', 'Download Invoice', 'Leave Feedback']) {
         expect(find.textContaining(absent), findsNothing, reason: absent);
       }
+    });
+
+    /// A loaded two-line order (spinach x2, eggs x1) — MA-152's fixture.
+    Future<void> pumpTwoLineOrder(WidgetTester tester) async {
+      orders.byId['ord_3f9a2c1b77'] = testOrder(
+        'ord_3f9a2c1b77',
+        deliveryDate: DateTime(2026, 10, 3),
+        items: const [
+          OrderItem(productId: 'spinach', quantity: 2),
+          OrderItem(productId: 'eggs', quantity: 1),
+        ],
+      );
+      await pump(tester, '/orders/ord_3f9a2c1b77');
+    }
+
+    FilledButton reorderButton(WidgetTester tester) =>
+        tester.widget<FilledButton>(find.byKey(const Key('orderDetail.reorder')));
+
+    testWidgets('MA-152: Reorder — busy while in flight, then "View Cart" opens the cart', (
+      tester,
+    ) async {
+      cart.addItemGate = Completer<void>();
+      await pumpTwoLineOrder(tester);
+      expect(find.text('Reorder Items'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('orderDetail.reorder')));
+      await tester.pump();
+      expect(reorderButton(tester).onPressed, isNull);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('orderDetail.reorder')),
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+      final support = tester.widget<OutlinedButton>(find.byKey(const Key('orderDetail.support')));
+      expect(support.onPressed, isNotNull);
+
+      cart.addItemGate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Added 2 items to cart'), findsOneWidget);
+      expect(reorderButton(tester).onPressed, isNotNull);
+      await tester.tap(find.text('View Cart'));
+      await tester.pumpAndSettle();
+      expect(find.text('stub /cart'), findsOneWidget);
+    });
+
+    testWidgets('MA-152: Reorder — a partial failure names the product, still offers the cart', (
+      tester,
+    ) async {
+      cart.addItemExceptionsByProduct['eggs'] = _boom;
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.reorder')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text("Added 1 of 2 items to cart. Couldn't add Farm Fresh Eggs."),
+        findsOneWidget,
+      );
+      expect(find.text('View Cart'), findsOneWidget);
+    });
+
+    testWidgets('MA-152: Reorder — a full failure has no "View Cart"', (tester) async {
+      cart.addItemException = _boom;
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.reorder')));
+      await tester.pumpAndSettle();
+      expect(find.text("Couldn't add items to cart. Try again."), findsOneWidget);
+      expect(find.text('View Cart'), findsNothing);
+    });
+
+    testWidgets('MA-152: Support opens mailto with the display ID only', (tester) async {
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.support')));
+      await tester.pumpAndSettle();
+      expect(launcher.launched, ['mailto:support@milkful.app?subject=Order%203F9A2C1B']);
+    });
+
+    testWidgets('MA-152: Support with no mail app shows the address instead', (tester) async {
+      launcher.canLaunchResult = false;
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.support')));
+      await tester.pumpAndSettle();
+      expect(launcher.launched, isEmpty);
+      expect(find.text('No email app found. Contact us at support@milkful.app.'), findsOneWidget);
+    });
+
+    testWidgets('MA-152: no actions unless the order loaded', (tester) async {
+      orders.getException = _boom;
+      await pump(tester, '/orders/ord_x');
+      expect(find.text("Couldn't load this order."), findsOneWidget);
+      expect(find.byKey(const Key('orderDetail.reorder')), findsNothing);
+      expect(find.byKey(const Key('orderDetail.support')), findsNothing);
+    });
+
+    testWidgets('MA-152: no actions on a not-found order', (tester) async {
+      await pump(tester, '/orders/ord_missing');
+      expect(find.text('Order not found'), findsOneWidget);
+      expect(find.byKey(const Key('orderDetail.reorder')), findsNothing);
+      expect(find.byKey(const Key('orderDetail.support')), findsNothing);
     });
 
     testWidgets('cancelled at the cut-off: not charged, copy says so', (tester) async {
