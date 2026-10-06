@@ -163,6 +163,48 @@ void main() {
     await bloc.close();
   });
 
+  test('a refresh that fails while a page is in flight clears the paging spinner', () async {
+    wallet.transactionsGate = Completer<void>();
+    final bloc = build()..add(const HistoryOpened());
+    await settle(bloc);
+    bloc.add(const NextPageRequested());
+    expect((await settle(bloc)).pagingStatus, LedgerPagingStatus.loading);
+    wallet.listTransactionsException = _boom;
+    final refresh = HistoryRefreshed();
+    bloc.add(refresh);
+    await refresh.completer.future;
+    wallet.transactionsGate!.complete();
+    var s = await settle(bloc);
+    expect(s.pagingStatus, LedgerPagingStatus.idle);
+    expect(s.entries, hasLength(3));
+    bloc.add(const NextPageRequested());
+    s = await settle(bloc);
+    expect(wallet.listTransactionsCalls.where((c) => c.cursor == 'c2'), hasLength(2));
+    expect(s.entries.last.id, 'led_0');
+    await bloc.close();
+  });
+
+  test('order lookups for a page do not block the next page request', () async {
+    wallet.ledgerPages['|c2'] = LedgerPage(
+      items: [entry('led_0', 'ORDER_DEBIT', ref: 'order:ord_2')],
+      nextCursor: 'c3',
+    );
+    wallet.ledgerPages['|c3'] = LedgerPage(items: [entry('led_m1', 'OPENING', amount: 0)]);
+    final bloc = build()..add(const HistoryOpened());
+    await settle(bloc);
+    orders.getGate = Completer<void>();
+    bloc.add(const NextPageRequested());
+    await settle(bloc);
+    expect(orders.getCalls.last, 'ord_2'); // lookup still pending
+    bloc.add(const NextPageRequested());
+    var s = await settle(bloc);
+    expect(s.entries.map((e) => e.id), ['led_3', 'led_2', 'led_1', 'led_0', 'led_m1']);
+    orders.getGate!.complete();
+    s = await settle(bloc);
+    expect(s.orderSources.containsKey('ord_2'), isTrue);
+    await bloc.close();
+  });
+
   test('a failed order lookup is cached as null and not retried on refresh', () async {
     orders.getException = _boom;
     final bloc = build()..add(const HistoryOpened());

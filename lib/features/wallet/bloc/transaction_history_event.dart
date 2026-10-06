@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 
+import '../../orders/models/order_summary.dart';
 import '../domain/ledger_copy.dart';
 
 sealed class TransactionHistoryEvent extends Equatable {
@@ -44,4 +45,14 @@ class RetryBalance extends TransactionHistoryEvent {
 
 class RetryLedger extends TransactionHistoryEvent {
   const RetryLedger();
+}
+
+/// Internal: order lookups finished (added by the bloc itself).
+class OrderSourcesResolved extends TransactionHistoryEvent {
+  const OrderSourcesResolved(this.sources);
+
+  final Map<String, OrderSource?> sources;
+
+  @override
+  List<Object?> get props => [sources];
 }

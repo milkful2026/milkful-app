@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -28,6 +30,9 @@ class TransactionHistoryBloc extends Bloc<TransactionHistoryEvent, TransactionHi
     on<NextPageRequested>(_onNextPage, transformer: droppable());
     on<RetryBalance>((event, emit) => _loadBalance(emit, keepOnFailure: false));
     on<RetryLedger>((event, emit) => _loadLedger(emit, keepOnFailure: false));
+    on<OrderSourcesResolved>(
+      (event, emit) => emit(state.copyWith(orderSources: {...state.orderSources, ...event.sources})),
+    );
   }
 
   static const pageSize = 50;
@@ -101,7 +106,7 @@ class TransactionHistoryBloc extends Bloc<TransactionHistoryEvent, TransactionHi
           pagingStatus: LedgerPagingStatus.idle,
         ),
       );
-      await _resolveOrders(emit, page.items);
+      unawaited(_resolveOrders(page.items));
       return true;
     } on ApiException catch (e) {
       if (isClosed || emit.isDone || generation != _generation) return false;
@@ -136,7 +141,8 @@ class TransactionHistoryBloc extends Bloc<TransactionHistoryEvent, TransactionHi
         limit: pageSize,
         types: state.filter.types,
       );
-      if (isClosed || generation != _generation) return; // filter changed / refreshed
+      if (isClosed) return;
+      if (generation != _generation) return _clearStalePaging(emit); // filter changed / refreshed
       final seen = {for (final e in state.entries) e.id};
       emit(
         state.copyWith(
@@ -146,17 +152,28 @@ class TransactionHistoryBloc extends Bloc<TransactionHistoryEvent, TransactionHi
           pagingStatus: LedgerPagingStatus.idle,
         ),
       );
-      await _resolveOrders(emit, page.items);
+      // Not awaited: the droppable handler must finish as soon as the page is
+      // shown, or load-more requests during the lookups are silently dropped.
+      unawaited(_resolveOrders(page.items));
     } catch (_) {
-      if (!isClosed && generation == _generation) {
-        emit(state.copyWith(pagingStatus: LedgerPagingStatus.failed));
-      }
+      if (isClosed) return;
+      if (generation != _generation) return _clearStalePaging(emit);
+      emit(state.copyWith(pagingStatus: LedgerPagingStatus.failed));
+    }
+  }
+
+  /// A page outdated by a reload is dropped; its spinner must not outlive it
+  /// (a failed refresh keeps the old state, so nothing else would clear it).
+  void _clearStalePaging(Emitter<TransactionHistoryState> emit) {
+    if (state.pagingStatus == LedgerPagingStatus.loading) {
+      emit(state.copyWith(pagingStatus: LedgerPagingStatus.idle));
     }
   }
 
   /// One `GET /orders/{id}` per distinct order for the bloc's lifetime;
-  /// a failure caches null (the chip reads "Order").
-  Future<void> _resolveOrders(Emitter<TransactionHistoryState> emit, List<LedgerEntry> page) async {
+  /// a failure caches null (the chip reads "Order"). Results arrive via
+  /// [OrderSourcesResolved] so callers needn't wait on the lookups.
+  Future<void> _resolveOrders(List<LedgerEntry> page) async {
     final ids = {
       for (final e in page)
         if (e.orderId != null && !_requestedOrders.contains(e.orderId)) e.orderId!,
@@ -172,7 +189,6 @@ class TransactionHistoryBloc extends Bloc<TransactionHistoryEvent, TransactionHi
         }
       }),
     );
-    if (isClosed || emit.isDone) return;
-    emit(state.copyWith(orderSources: {...state.orderSources, ...Map.fromEntries(fetched)}));
+    if (!isClosed) add(OrderSourcesResolved(Map.fromEntries(fetched)));
   }
 }

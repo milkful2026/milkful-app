@@ -22,6 +22,7 @@ class FakeOrderRepository implements OrderRepository {
   Object? getException;
   Completer<void>? pageGate;
   Completer<void>? firstPageGate;
+  Completer<void>? getGate;
 
   final List<String?> listCursors = [];
   final List<String> getCalls = [];
@@ -41,6 +42,7 @@ class FakeOrderRepository implements OrderRepository {
   @override
   Future<OrderSummary> getById(String orderId) async {
     getCalls.add(orderId);
+    if (getGate != null) await getGate!.future;
     if (getException != null) throw getException!;
     final order = byId[orderId];
     if (order == null) {
