@@ -47,6 +47,8 @@ Product _p(String id, String name, double price) => Product(
 /// MA-152 FR-2 — records `mailto:` launches instead of opening a mail app.
 class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
   bool canLaunchResult = true;
+  bool launchResult = true;
+  Object? launchError;
   final List<String> launched = [];
 
   @override
@@ -58,7 +60,8 @@ class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements U
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launched.add(url);
-    return true;
+    if (launchError != null) throw launchError!;
+    return launchResult;
   }
 }
 
@@ -256,6 +259,22 @@ void main() {
       await tester.tap(find.byKey(const Key('orderDetail.support')));
       await tester.pumpAndSettle();
       expect(launcher.launched, isEmpty);
+      expect(find.text('No email app found. Contact us at support@milkful.app.'), findsOneWidget);
+    });
+
+    testWidgets("MA-152: Support whose mail app won't open shows the address instead", (tester) async {
+      launcher.launchResult = false;
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.support')));
+      await tester.pumpAndSettle();
+      expect(find.text('No email app found. Contact us at support@milkful.app.'), findsOneWidget);
+    });
+
+    testWidgets('MA-152: Support whose launch throws shows the address instead', (tester) async {
+      launcher.launchError = PlatformException(code: 'ACTIVITY_NOT_FOUND');
+      await pumpTwoLineOrder(tester);
+      await tester.tap(find.byKey(const Key('orderDetail.support')));
+      await tester.pumpAndSettle();
       expect(find.text('No email app found. Contact us at support@milkful.app.'), findsOneWidget);
     });
 

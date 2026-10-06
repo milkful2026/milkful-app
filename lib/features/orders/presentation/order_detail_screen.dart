@@ -62,9 +62,15 @@ class OrderDetailScreen extends StatelessWidget {
       path: AppConfig.supportEmail,
       query: 'subject=${Uri.encodeComponent(subject)}',
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
+    // A mail app that's found but won't open (false or a throw) gets the same
+    // fallback as no mail app at all.
+    var launched = false;
+    try {
+      launched = await canLaunchUrl(uri) && await launchUrl(uri);
+    } catch (_) {
+      launched = false;
+    }
+    if (!launched) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('No email app found. Contact us at ${AppConfig.supportEmail}.'),
