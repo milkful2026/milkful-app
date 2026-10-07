@@ -34,6 +34,9 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
   final List<String> resumeCalls = [];
   final List<String> stopCalls = [];
   final List<String> skipCalls = [];
+
+  /// The date of each `skip`, alongside [skipCalls] (MA-155).
+  final List<DateTime> skipDates = [];
   final List<String> editCalls = [];
   Map<String, dynamic>? lastCreateRequest;
 
@@ -107,6 +110,7 @@ class FakeSubscriptionRepository implements SubscriptionRepository {
   @override
   Future<void> skip(String id, DateTime date) async {
     skipCalls.add(id);
+    skipDates.add(date);
     if (actionException != null) throw actionException!;
   }
 

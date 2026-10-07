@@ -9,6 +9,7 @@ import '../../catalog/models/product.dart';
 import '../../subscriptions/data/subscription_repository.dart';
 import '../bloc/scheduled_delivery_cubit.dart';
 import '../data/order_repository.dart';
+import '../domain/cancel_copy.dart';
 import '../domain/order_buckets.dart';
 import '../domain/order_status_copy.dart';
 import '../models/order_entry.dart';
@@ -16,8 +17,9 @@ import 'order_formatting.dart';
 import 'widgets/detail_cards.dart';
 
 /// MA-146 FR-8 — `/orders/scheduled/:subscriptionId`: a subscription's next
-/// delivery, not yet an order. [entry] comes from My Orders as `extra`;
-/// without it (deep link, restart) the cubit fetches the subscription.
+/// delivery, not yet an order, with Cancel delivery (MA-155 FR-5). [entry]
+/// comes from My Orders as `extra`; without it (deep link, restart) the cubit
+/// fetches the subscription.
 class ScheduledDeliveryScreen extends StatelessWidget {
   const ScheduledDeliveryScreen({
     super.key,
@@ -45,7 +47,7 @@ class ScheduledDeliveryScreen extends StatelessWidget {
         appBar: AppBar(title: const Text('Order Details'), centerTitle: true),
         body: BlocConsumer<ScheduledDeliveryCubit, ScheduledDeliveryState>(
           listenWhen: (previous, current) =>
-              current is ScheduledDeliveryLoaded && current.change is! NoChange,
+              current is ScheduledDeliveryLoaded && current.change is! NoChange && !current.quiet,
           listener: (context, state) {
             final change = (state as ScheduledDeliveryLoaded).change;
             final messenger = ScaffoldMessenger.of(context);
@@ -122,6 +124,11 @@ class ScheduledDeliveryScreen extends StatelessWidget {
                       title: 'Milkful Wallet',
                     ),
                   ),
+                  _CancelDeliverySection(
+                    date: entry.date,
+                    now: (clock ?? DateTime.now)(),
+                    onCancel: () => _cancelDelivery(context, entry, product),
+                  ),
                   Center(
                     child: TextButton(
                       onPressed: () => context.go('/subscriptions'),
@@ -135,6 +142,78 @@ class ScheduledDeliveryScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// MA-155 FR-5 — confirm, then cancel through Skip. Success closes the
+  /// screen and tells My Orders to reload. When Skip says CUTOFF_PASSED, the
+  /// cubit has refreshed quietly (no "now an order" notice); this SnackBar
+  /// gives the specific reason, with View order if it became an order.
+  Future<void> _cancelDelivery(BuildContext context, ScheduledEntry entry, Product? product) async {
+    final cubit = context.read<ScheduledDeliveryCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('cancelDelivery.dialog'),
+        title: const Text('Cancel this delivery?'),
+        content: Text(cancelDeliveryBody(product?.name ?? 'Item', entry.date)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep delivery'),
+          ),
+          TextButton(
+            key: const Key('cancelDelivery.confirm'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cancel delivery'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final outcome = await cubit.cancelDelivery();
+    if (outcome == null) return;
+
+    final state = cubit.state;
+    final viewOrder = switch (state) {
+      ScheduledDeliveryLoaded(change: BecameOrder(:final orderId)) => SnackBarAction(
+        label: 'View order',
+        onPressed: () => router.pushReplacement('/orders/$orderId'),
+      ),
+      _ => null,
+    };
+    messenger.hideCurrentSnackBar();
+    switch (outcome) {
+      case SkipOutcome.cancelled:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(deliveryCancelledMessage(entry.date)),
+            action: SnackBarAction(
+              label: shopForTomorrowLabel,
+              onPressed: () => router.go('/catalog'),
+            ),
+          ),
+        );
+        if (router.canPop()) {
+          router.pop(true);
+        } else {
+          router.go('/orders');
+        }
+      case SkipOutcome.cutoffPassed:
+        messenger.showSnackBar(
+          SnackBar(content: const Text(deliveryCutoffPassedMessage), action: viewOrder),
+        );
+      case SkipOutcome.alreadyOrder:
+        messenger.showSnackBar(
+          SnackBar(content: const Text(deliveryAlreadyOrderMessage), action: viewOrder),
+        );
+      case SkipOutcome.failed:
+        messenger.showSnackBar(const SnackBar(content: Text(cancelFailedMessage)));
+    }
   }
 
   Widget _estimate(ScheduledEntry entry, Product? product) {
@@ -151,6 +230,48 @@ class ScheduledDeliveryScreen extends StatelessWidget {
       amount: '≈ ${formatPaise(estimate, alwaysDecimals: true)}',
       caption:
           'Final price (including any tax and delivery fee) is confirmed the evening before.',
+    );
+  }
+}
+
+/// MA-155 FR-5/FR-6 — before the cut-off (worked out on the device: the
+/// subscription has no `cancellableUntil`, and Subscription Service rejects a
+/// late skip anyway), the policy line and Cancel delivery; after it, the
+/// closed line.
+class _CancelDeliverySection extends StatelessWidget {
+  const _CancelDeliverySection({required this.date, required this.now, required this.onCancel});
+
+  final DateTime date;
+  final DateTime now;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    if (!now.isBefore(deliveryCutoff(date))) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Text(cancellationClosedLine, style: muted, textAlign: TextAlign.center),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(deliveryPolicyLine(date), style: muted, textAlign: TextAlign.center),
+          TextButton(
+            key: const Key('scheduled.cancel'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            onPressed: onCancel,
+            child: const Text('Cancel delivery'),
+          ),
+        ],
+      ),
     );
   }
 }

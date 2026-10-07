@@ -1,3 +1,4 @@
+import '../../../core/utils/money.dart';
 import '../models/order_summary.dart';
 
 /// Status labels, tones and the "known not charged" rule — shared by My
@@ -37,9 +38,11 @@ const scheduledChip = StatusChipSpec('Scheduled', ChipTone.primary, ChipIcon.cal
 /// charge, a checkout cancelled through the Wallet void (MA-144 PD-1), or a
 /// subscription order closed past its charge deadline after a void
 /// (MA-143, `NEEDS_ATTENTION` + `CUTOFF_PASSED`). Any other
-/// `NEEDS_ATTENTION` (e.g. `SWEEP_EXHAUSTED`) may have been charged.
+/// `NEEDS_ATTENTION` (e.g. `SWEEP_EXHAUSTED`) may have been charged. A
+/// customer cancel (MA-155 FR-4) was charged and refunded, so it isn't.
 bool isKnownNotCharged(OrderSummary order) => switch (order.status.wire) {
-  'CANCELLED' || 'PAYMENT_FAILED' => true,
+  'CANCELLED' => !order.isCustomerCancelled,
+  'PAYMENT_FAILED' => true,
   'NEEDS_ATTENTION' => order.failureReason == 'CUTOFF_PASSED',
   _ => false,
 };
@@ -66,7 +69,16 @@ bool showsReason(OrderStatus status) => const {
 /// `CUTOFF_PASSED`, where a Wallet void proved it (MA-142/143/144); for
 /// `SWEEP_EXHAUSTED` the charge may be unknown, so the copy only promises
 /// no double charge (matching MA-144's CHECKOUT_NEEDS_ATTENTION).
-String reasonText(String? failureReason) => switch (failureReason) {
+/// `CUSTOMER_CANCELLED` (MA-155 FR-4) reads the amount and refund state from
+/// [order].
+String reasonText(String? failureReason, [OrderSummary? order]) => switch (failureReason) {
+  'CUSTOMER_CANCELLED' => switch (order?.refundState) {
+    RefundState.refunded =>
+      'You cancelled this order. '
+          '${formatPaise(order!.amountPaise, alwaysDecimals: true)} was refunded to your Wallet.',
+    RefundState.pending => 'You cancelled this order. Your refund is in progress.',
+    _ => 'You cancelled this order.',
+  },
   'INSUFFICIENT_BALANCE' => "Your wallet didn't have enough balance for this order.",
   'WALLET_NOT_ACTIVE' => "Your wallet wasn't active when this order was placed.",
   'DELIVERY_ADDRESS_UNKNOWN' => "We couldn't find a delivery address on your account.",
@@ -79,8 +91,16 @@ String reasonText(String? failureReason) => switch (failureReason) {
   _ => 'Something went wrong with this order.',
 };
 
-/// FR-5 caption under Grand Total.
+/// FR-5 caption under Grand Total. A customer cancel with nothing refunded
+/// (₹0, or no debit found) gets none: it must not imply money came back.
 String? billCaption(OrderSummary order) {
+  if (order.isCustomerCancelled) {
+    return switch (order.refundState) {
+      RefundState.refunded => 'Refunded to Wallet',
+      RefundState.pending => 'Refund in progress',
+      _ => null,
+    };
+  }
   if (isKnownNotCharged(order)) return 'Not charged';
   if (order.status == OrderStatus.needsAttention) return 'Charge under review';
   return null;
