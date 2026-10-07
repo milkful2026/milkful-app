@@ -18,6 +18,10 @@ class OrderSummary extends Equatable {
     this.failureReason,
     this.createdAt,
     this.confirmedAt,
+    this.cancellableUntil,
+    this.cancelReason,
+    this.cancelledAt,
+    this.refundState,
   });
 
   final String orderId;
@@ -34,6 +38,17 @@ class OrderSummary extends Equatable {
   final DateTime? createdAt;
   final DateTime? confirmedAt;
 
+  /// MA-154 FR-7 — set only while a CONFIRMED order can still be cancelled.
+  final DateTime? cancellableUntil;
+  final CancelReason? cancelReason;
+  final DateTime? cancelledAt;
+  final RefundState? refundState;
+
+  /// Cancelled by the customer (charged, then refunded) — unlike a
+  /// CANCELLED order the backend closed without charging (MA-144).
+  bool get isCustomerCancelled =>
+      status == OrderStatus.cancelled && failureReason == 'CUSTOMER_CANCELLED';
+
   factory OrderSummary.fromJson(Map<String, dynamic> json) => OrderSummary(
     orderId: json['orderId'] as String,
     source: OrderSource.fromWire(json['source'] as String?),
@@ -49,6 +64,10 @@ class OrderSummary extends Equatable {
     failureReason: json['failureReason'] as String?,
     createdAt: _parseInstant(json['createdAt']),
     confirmedAt: _parseInstant(json['confirmedAt']),
+    cancellableUntil: _parseInstant(json['cancellableUntil']),
+    cancelReason: CancelReason.fromWire(json['cancelReason']),
+    cancelledAt: _parseInstant(json['cancelledAt']),
+    refundState: RefundState.fromWire(json['refundState']),
   );
 
   @override
@@ -64,6 +83,10 @@ class OrderSummary extends Equatable {
     failureReason,
     createdAt,
     confirmedAt,
+    cancellableUntil,
+    cancelReason,
+    cancelledAt,
+    refundState,
   ];
 }
 
@@ -83,6 +106,45 @@ class OrderItem extends Equatable {
 
   @override
   List<Object?> get props => [productId, quantity];
+}
+
+/// MA-154 FR-1 — the optional reason a customer gives for cancelling.
+enum CancelReason {
+  orderedByMistake('ORDERED_BY_MISTAKE'),
+  notHome('NOT_HOME'),
+  changedMind('CHANGED_MIND'),
+  other('OTHER');
+
+  const CancelReason(this.wire);
+
+  final String wire;
+
+  /// Unknown or missing → null (MA-155 FR-7).
+  static CancelReason? fromWire(Object? value) {
+    for (final r in values) {
+      if (r.wire == value) return r;
+    }
+    return null;
+  }
+}
+
+/// MA-154 — where a customer cancel's refund to the Wallet stands.
+enum RefundState {
+  pending('PENDING'),
+  refunded('REFUNDED'),
+  notRequired('NOT_REQUIRED');
+
+  const RefundState(this.wire);
+
+  final String wire;
+
+  /// Unknown or missing → null (MA-155 FR-7).
+  static RefundState? fromWire(Object? value) {
+    for (final s in values) {
+      if (s.wire == value) return s;
+    }
+    return null;
+  }
 }
 
 enum OrderSource {

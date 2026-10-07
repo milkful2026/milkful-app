@@ -105,14 +105,17 @@ class DayTotal {
 
 /// FR-8 — sums exact order amounts and scheduled estimates. Known-not-
 /// charged (and legacy FAILED) orders are left out; an unknown estimate is
-/// skipped.
+/// skipped. A customer-cancelled order is left out too: its amount isn't
+/// struck (it was charged), but it was refunded (MA-32, decided 2026-10-08).
 DayTotal dayTotal(List<OrderEntry> entries, Map<String, Product?> products) {
   var paise = 0;
   var hasEstimate = false;
   for (final e in entries) {
     switch (e) {
       case OrderedEntry(:final order):
-        if (!isAmountStruck(order)) paise += order.amountPaise;
+        if (!isAmountStruck(order) && !order.isCustomerCancelled) {
+          paise += order.amountPaise;
+        }
       case ScheduledEntry():
         final estimate = estimatePaise(e, products[e.productId]);
         if (estimate != null) {
