@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/utils/ist_clock.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../catalog/models/product.dart';
@@ -50,7 +51,12 @@ class ScheduledDeliveryLoading extends ScheduledDeliveryState {
 }
 
 class ScheduledDeliveryLoaded extends ScheduledDeliveryState {
-  const ScheduledDeliveryLoaded(this.entry, this.product, {this.change = const NoChange()});
+  const ScheduledDeliveryLoaded(
+    this.entry,
+    this.product, {
+    this.change = const NoChange(),
+    this.quiet = false,
+  });
 
   final ScheduledEntry entry;
 
@@ -58,8 +64,12 @@ class ScheduledDeliveryLoaded extends ScheduledDeliveryState {
   final Product? product;
   final ScheduleChange change;
 
+  /// MA-155 — the refresh after a refused Cancel delivery: its outcome
+  /// SnackBar explains [change], so the screen's own notice stays quiet.
+  final bool quiet;
+
   @override
-  List<Object?> get props => [entry, product, change];
+  List<Object?> get props => [entry, product, change, quiet];
 }
 
 /// STOPPED, or no next delivery after today.
@@ -70,6 +80,11 @@ class ScheduledDeliveryGone extends ScheduledDeliveryState {
 class ScheduledDeliveryError extends ScheduledDeliveryState {
   const ScheduledDeliveryError();
 }
+
+/// MA-155 FR-5 — how a Cancel delivery (Skip) ended. [alreadyOrder]: Skip
+/// said CUTOFF_PASSED before the cut-off, meaning the delivery was already
+/// created as an order, which can still be cancelled from Order Detail.
+enum SkipOutcome { cancelled, cutoffPassed, alreadyOrder, failed }
 
 /// MA-146 FR-8 — a subscription's next delivery that isn't an order yet.
 class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
@@ -116,9 +131,37 @@ class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
     await _fetch(shownDate: _shownDate);
   }
 
-  Future<void> refresh() => _fetch(shownDate: _shownDate);
+  Future<void> refresh({bool quiet = false}) => _fetch(shownDate: _shownDate, quiet: quiet);
 
-  Future<void> _fetch({required DateTime? shownDate}) async {
+  bool _cancelling = false;
+
+  /// MA-155 FR-5 — cancels the shown delivery through Subscription Service's
+  /// Skip. Null (and no call) unless loaded, or while one is in flight. A
+  /// CUTOFF_PASSED answer refreshes, which flags a delivery that became an
+  /// order (`BecameOrder`).
+  Future<SkipOutcome?> cancelDelivery() async {
+    final current = state;
+    if (current is! ScheduledDeliveryLoaded || _cancelling) return null;
+    _cancelling = true;
+    final date = current.entry.date;
+    try {
+      await _subscriptions.skip(subscriptionId, date);
+      return SkipOutcome.cancelled;
+    } on ApiException catch (e) {
+      if (e.errorCode != 'CUTOFF_PASSED') return SkipOutcome.failed;
+      final outcome = _clock().isBefore(deliveryCutoff(date))
+          ? SkipOutcome.alreadyOrder
+          : SkipOutcome.cutoffPassed;
+      await refresh(quiet: true);
+      return outcome;
+    } catch (_) {
+      return SkipOutcome.failed;
+    } finally {
+      _cancelling = false;
+    }
+  }
+
+  Future<void> _fetch({required DateTime? shownDate, bool quiet = false}) async {
     try {
       final sub = await _subscriptions.get(subscriptionId);
       final entries = scheduledEntries([sub], const [], istToday(_clock));
@@ -130,7 +173,7 @@ class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
       final ScheduleChange change = (shownDate == null || isSameDate(shownDate, entry.date))
           ? const NoChange()
           : await _whyMoved(shownDate);
-      await _emitLoaded(entry, change);
+      await _emitLoaded(entry, change, quiet: quiet);
     } catch (_) {
       if (!isClosed) emit(const ScheduledDeliveryError());
     }
@@ -152,10 +195,14 @@ class ScheduledDeliveryCubit extends Cubit<ScheduledDeliveryState> {
     return const DateChanged();
   }
 
-  Future<void> _emitLoaded(ScheduledEntry entry, ScheduleChange change) async {
+  Future<void> _emitLoaded(
+    ScheduledEntry entry,
+    ScheduleChange change, {
+    bool quiet = false,
+  }) async {
     final products = await resolveProducts(_catalog, [entry.productId]);
     if (isClosed) return;
     _shownDate = entry.date;
-    emit(ScheduledDeliveryLoaded(entry, products[entry.productId], change: change));
+    emit(ScheduledDeliveryLoaded(entry, products[entry.productId], change: change, quiet: quiet));
   }
 }

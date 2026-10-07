@@ -23,7 +23,12 @@ class OrderDetailLoading extends OrderDetailState {
 }
 
 class OrderDetailLoaded extends OrderDetailState {
-  const OrderDetailLoaded(this.order, this.products, {this.reordering = false});
+  const OrderDetailLoaded(
+    this.order,
+    this.products, {
+    this.reordering = false,
+    this.cancelling = false,
+  });
 
   final OrderSummary order;
 
@@ -33,11 +38,19 @@ class OrderDetailLoaded extends OrderDetailState {
   /// MA-152 FR-1 — a Reorder is in flight (its button is disabled).
   final bool reordering;
 
-  OrderDetailLoaded copyWith({bool? reordering}) =>
-      OrderDetailLoaded(order, products, reordering: reordering ?? this.reordering);
+  /// MA-155 FR-7 — a cancel is in flight.
+  final bool cancelling;
+
+  OrderDetailLoaded copyWith({OrderSummary? order, bool? reordering, bool? cancelling}) =>
+      OrderDetailLoaded(
+        order ?? this.order,
+        products,
+        reordering: reordering ?? this.reordering,
+        cancelling: cancelling ?? this.cancelling,
+      );
 
   @override
-  List<Object?> get props => [order, products, reordering];
+  List<Object?> get props => [order, products, reordering, cancelling];
 }
 
 /// `404 ORDER_NOT_FOUND` — unknown, or another user's (never leaked).
@@ -69,6 +82,9 @@ class ReorderResult {
   bool get showViewCart => added > 0;
 }
 
+/// MA-155 FR-3 — how a cancel ended; the screen maps it to its SnackBar.
+enum CancelOutcome { cancelled, cutoffPassed, notCancellable, failed }
+
 /// MA-146 FR-2 — one order from `GET /orders/{id}`, plus product details.
 class OrderDetailCubit extends Cubit<OrderDetailState> {
   OrderDetailCubit({
@@ -85,6 +101,10 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
   final CatalogRepository _catalog;
   final CartRepository _cart;
   final String orderId;
+
+  /// MA-155 — true once a cancel succeeded here, so the screen can tell My
+  /// Orders to reload when it closes.
+  bool changed = false;
 
   /// Shows the skeleton; used on open and after an error.
   Future<void> load() async {
@@ -105,12 +125,14 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
         order.items.map((i) => i.productId).toSet(),
       );
       if (!isClosed) {
-        // A refresh mid-Reorder keeps the button disabled until it ends.
-        final reordering = switch (state) {
-          OrderDetailLoaded(:final reordering) => reordering,
-          _ => false,
+        // A refresh mid-Reorder (or mid-cancel) keeps its flag until it ends.
+        final (reordering, cancelling) = switch (state) {
+          OrderDetailLoaded(:final reordering, :final cancelling) => (reordering, cancelling),
+          _ => (false, false),
         };
-        emit(OrderDetailLoaded(order, products, reordering: reordering));
+        emit(
+          OrderDetailLoaded(order, products, reordering: reordering, cancelling: cancelling),
+        );
       }
       return true;
     } on ApiException catch (e) {
@@ -155,6 +177,44 @@ class OrderDetailCubit extends Cubit<OrderDetailState> {
     if (!isClosed && now is OrderDetailLoaded) emit(now.copyWith(reordering: false));
     final total = current.order.items.length;
     return ReorderResult(added: total - failed.length, total: total, failedNames: failed);
+  }
+
+  /// MA-155 FR-3 — cancels with an optional [reason]. Null (and no call)
+  /// unless loaded and not already cancelling. On success the screen redraws
+  /// from the returned order (no extra GET). A cut-off or not-cancellable
+  /// answer reloads the order, so the Cancel action disappears.
+  Future<CancelOutcome?> cancel(CancelReason? reason) async {
+    final current = state;
+    if (current is! OrderDetailLoaded || current.cancelling) return null;
+    emit(current.copyWith(cancelling: true));
+    try {
+      final cancelled = await _orders.cancel(orderId, reason: reason);
+      changed = true;
+      final now = state;
+      if (!isClosed && now is OrderDetailLoaded) {
+        emit(now.copyWith(order: cancelled, cancelling: false));
+      }
+      return CancelOutcome.cancelled;
+    } on ApiException catch (e) {
+      _stopCancelling();
+      switch (e.errorCode) {
+        case 'CUTOFF_PASSED':
+          await refresh();
+          return CancelOutcome.cutoffPassed;
+        case 'ORDER_NOT_CANCELLABLE':
+          await refresh();
+          return CancelOutcome.notCancellable;
+      }
+      return CancelOutcome.failed;
+    } catch (_) {
+      _stopCancelling();
+      return CancelOutcome.failed;
+    }
+  }
+
+  void _stopCancelling() {
+    final now = state;
+    if (!isClosed && now is OrderDetailLoaded) emit(now.copyWith(cancelling: false));
   }
 
   void _fail(bool keepContent) {

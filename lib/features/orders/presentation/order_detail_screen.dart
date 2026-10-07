@@ -4,24 +4,31 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/utils/ist_clock.dart';
 import '../../../core/utils/money.dart';
 import '../../cart/data/cart_repository.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../bloc/order_detail_cubit.dart';
 import '../data/order_repository.dart';
+import '../domain/cancel_copy.dart';
 import '../domain/order_status_copy.dart';
 import '../models/order_summary.dart';
 import 'order_formatting.dart';
+import 'widgets/cancel_order_sheet.dart';
 import 'widgets/detail_cards.dart';
 import 'widgets/product_thumb.dart';
 
 /// MA-146 — `/orders/:orderId`: the subset of `order_details_inr` that real
-/// data backs today, plus Reorder and Support (MA-152). No invoice or
-/// feedback (MA-38 / MA-28).
+/// data backs today, plus Reorder and Support (MA-152) and Cancel order
+/// (MA-155). No invoice or feedback (MA-38 / MA-28).
 class OrderDetailScreen extends StatelessWidget {
-  const OrderDetailScreen({super.key, required this.orderId});
+  const OrderDetailScreen({super.key, required this.orderId, this.clock});
 
   final String orderId;
+
+  /// Decides only what's shown (the Cancel action, the "closed" line); the
+  /// server decides whether a cancel is allowed.
+  final Clock? clock;
 
   /// A failed refresh keeps the order on screen and says so.
   Future<void> _refresh(BuildContext context) async {
@@ -79,6 +86,34 @@ class OrderDetailScreen extends StatelessWidget {
     }
   }
 
+  /// MA-155 FR-2/FR-3 — the cancel sheet, then the result SnackBar.
+  Future<void> _cancel(BuildContext context, OrderSummary order) async {
+    final cubit = context.read<OrderDetailCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final outcome = await showModalBottomSheet<CancelOutcome>(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      builder: (_) => CancelOrderSheet(order: order, onConfirm: cubit.cancel),
+    );
+    if (outcome == null) return;
+    final cancelled = cubit.state;
+    messenger.showSnackBar(switch (outcome) {
+      CancelOutcome.cancelled when cancelled is OrderDetailLoaded => SnackBar(
+        content: Text(cancelResultMessage(cancelled.order)),
+        action: SnackBarAction(
+          label: shopForTomorrowLabel,
+          onPressed: () => router.go('/catalog'),
+        ),
+      ),
+      CancelOutcome.cutoffPassed => const SnackBar(content: Text(cancelCutoffPassedMessage)),
+      CancelOutcome.notCancellable => const SnackBar(content: Text(cancelNotCancellableMessage)),
+      _ => const SnackBar(content: Text(cancelFailedMessage)),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -88,117 +123,201 @@ class OrderDetailScreen extends StatelessWidget {
         cartRepository: context.read<CartRepository>(),
         orderId: orderId,
       )..load(),
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Order Details'), centerTitle: true),
-        body: BlocBuilder<OrderDetailCubit, OrderDetailState>(
-          builder: (context, state) => switch (state) {
-            OrderDetailLoading() => const _DetailSkeleton(),
-            OrderDetailNotFound() => DetailMessage(
-              title: 'Order not found',
-              body: "This order doesn't exist or isn't on your account.",
-              buttonLabel: 'Back to My Orders',
-              onPressed: () => backToMyOrders(context),
-            ),
-            OrderDetailError() => DetailMessage(
-              title: "Couldn't load this order.",
-              buttonLabel: 'Retry',
-              onPressed: () => context.read<OrderDetailCubit>().load(),
-            ),
-            OrderDetailLoaded(:final order, :final products, :final reordering) => RefreshIndicator(
-              onRefresh: () => _refresh(context),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 8, bottom: 24),
-                children: [
-                  DetailHeaderCard(
-                    orderId: order.orderId,
-                    placedOn: order.createdAt == null ? null : formatPlacedOn(order.createdAt!),
-                    banner: bannerSpec(order.status),
-                    note: showsReason(order.status) ? reasonText(order.failureReason) : null,
-                  ),
-                  DetailCard(
-                    title: 'Items in this Order',
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < order.items.length; i++)
-                          DetailItemRow(
-                            key: Key('orderDetail.item.$i'),
-                            name: productNameFor(products, order.items[i].productId),
-                            quantity: order.items[i].quantity,
-                            product: products[order.items[i].productId],
-                            fromSubscription: order.source == OrderSource.subscription,
-                          ),
-                      ],
-                    ),
-                  ),
-                  DetailCard(
-                    title: 'Bill Details',
-                    child: BillRow(
-                      label: 'Grand Total',
-                      // A pre-pricing failure (MA-132) has no real amount.
-                      amount: order.amountPaise == 0
-                          ? '—'
-                          : formatPaise(order.amountPaise, alwaysDecimals: true),
-                      struck: order.amountPaise != 0 && isAmountStruck(order),
-                      caption: order.amountPaise == 0 ? null : billCaption(order),
-                    ),
-                  ),
-                  DetailCard(
-                    title: 'Delivery Info',
-                    child: IconLine(
-                      icon: Icons.schedule,
-                      title: 'Delivery date',
-                      value: formatLongDate(order.deliveryDate),
-                    ),
-                  ),
-                  const DetailCard(
-                    title: 'Payment Method',
-                    child: IconLine(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'Milkful Wallet',
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // The spinner replaces the label, so a screen reader
-                        // still hears the button's name while it's busy.
-                        Semantics(
-                          button: true,
-                          enabled: !reordering,
-                          label: 'Reorder Items',
-                          excludeSemantics: reordering,
-                          child: FilledButton(
-                            key: const Key('orderDetail.reorder'),
-                            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                            onPressed: reordering ? null : () => _reorder(context),
-                            child: reordering
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Text('Reorder Items'),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          key: const Key('orderDetail.support'),
-                          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                          onPressed: () => _openSupport(context, order.orderId),
-                          child: const Text('Support'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+      child: _ReportChangeOnPop(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Order Details'), centerTitle: true),
+          body: BlocBuilder<OrderDetailCubit, OrderDetailState>(
+            builder: (context, state) => switch (state) {
+              OrderDetailLoading() => const _DetailSkeleton(),
+              OrderDetailNotFound() => DetailMessage(
+                title: 'Order not found',
+                body: "This order doesn't exist or isn't on your account.",
+                buttonLabel: 'Back to My Orders',
+                onPressed: () => backToMyOrders(context),
               ),
-            ),
-          },
+              OrderDetailError() => DetailMessage(
+                title: "Couldn't load this order.",
+                buttonLabel: 'Retry',
+                onPressed: () => context.read<OrderDetailCubit>().load(),
+              ),
+              OrderDetailLoaded(:final order, :final products, :final reordering) => RefreshIndicator(
+                onRefresh: () => _refresh(context),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8, bottom: 24),
+                  children: [
+                    DetailHeaderCard(
+                      orderId: order.orderId,
+                      placedOn: order.createdAt == null ? null : formatPlacedOn(order.createdAt!),
+                      banner: bannerSpec(order.status),
+                      note: showsReason(order.status)
+                          ? reasonText(order.failureReason, order)
+                          : null,
+                    ),
+                    DetailCard(
+                      title: 'Items in this Order',
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < order.items.length; i++)
+                            DetailItemRow(
+                              key: Key('orderDetail.item.$i'),
+                              name: productNameFor(products, order.items[i].productId),
+                              quantity: order.items[i].quantity,
+                              product: products[order.items[i].productId],
+                              fromSubscription: order.source == OrderSource.subscription,
+                            ),
+                        ],
+                      ),
+                    ),
+                    DetailCard(
+                      title: 'Bill Details',
+                      child: BillRow(
+                        label: 'Grand Total',
+                        // A pre-pricing failure (MA-132) has no real amount.
+                        amount: order.amountPaise == 0
+                            ? '—'
+                            : formatPaise(order.amountPaise, alwaysDecimals: true),
+                        struck: order.amountPaise != 0 && isAmountStruck(order),
+                        caption: order.amountPaise == 0 ? null : billCaption(order),
+                      ),
+                    ),
+                    DetailCard(
+                      title: 'Delivery Info',
+                      child: IconLine(
+                        icon: Icons.schedule,
+                        title: 'Delivery date',
+                        value: formatLongDate(order.deliveryDate),
+                      ),
+                    ),
+                    const DetailCard(
+                      title: 'Payment Method',
+                      child: IconLine(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'Milkful Wallet',
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // The spinner replaces the label, so a screen reader
+                          // still hears the button's name while it's busy.
+                          Semantics(
+                            button: true,
+                            enabled: !reordering,
+                            label: 'Reorder Items',
+                            excludeSemantics: reordering,
+                            child: FilledButton(
+                              key: const Key('orderDetail.reorder'),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                              ),
+                              onPressed: reordering ? null : () => _reorder(context),
+                              child: reordering
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Text('Reorder Items'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            key: const Key('orderDetail.support'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                            onPressed: () => _openSupport(context, order.orderId),
+                            child: const Text('Support'),
+                          ),
+                          _CancelSection(
+                            order: order,
+                            now: (clock ?? DateTime.now)(),
+                            onCancel: () => _cancel(context, order),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            },
+          ),
         ),
       ),
     );
+  }
+}
+
+/// MA-155 — after a cancel, closing Order Detail hands `true` back to My
+/// Orders (which pushed it), so the list reloads and shows the new status.
+/// With nothing beneath it (a deep link), the pop is left alone.
+class _ReportChangeOnPop extends StatelessWidget {
+  const _ReportChangeOnPop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<OrderDetailCubit>();
+    return BlocSelector<OrderDetailCubit, OrderDetailState, bool>(
+      selector: (_) => cubit.changed,
+      builder: (context, changed) => PopScope(
+        canPop: !changed || !GoRouter.of(context).canPop(),
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) context.pop(true);
+        },
+        child: child,
+      ),
+    );
+  }
+}
+
+/// MA-155 FR-1/FR-6 — the policy line and Cancel order while
+/// `cancellableUntil` is still ahead; once the cut-off (worked out here from
+/// the delivery date, so an older backend without `cancellableUntil` never
+/// shows "closed" early) has passed, the closed line; otherwise nothing.
+class _CancelSection extends StatelessWidget {
+  const _CancelSection({required this.order, required this.now, required this.onCancel});
+
+  final OrderSummary order;
+  final DateTime now;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final until = order.cancellableUntil;
+    if (until != null && now.isBefore(until)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(cancelPolicyLine(until), style: muted, textAlign: TextAlign.center),
+            TextButton(
+              key: const Key('orderDetail.cancel'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+                minimumSize: const Size.fromHeight(48),
+              ),
+              onPressed: onCancel,
+              child: const Text('Cancel order'),
+            ),
+          ],
+        ),
+      );
+    }
+    final closed = !now.isBefore(deliveryCutoff(order.deliveryDate));
+    if (order.status == OrderStatus.confirmed && closed) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Text(cancellationClosedLine, style: muted, textAlign: TextAlign.center),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

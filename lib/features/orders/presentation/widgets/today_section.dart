@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/money.dart';
 import '../../../catalog/models/product.dart';
 import '../../domain/order_status_copy.dart';
 import '../../models/order_summary.dart';
+import 'open_order_detail.dart';
 import 'product_thumb.dart';
 import 'status_chip.dart';
 
@@ -149,7 +149,7 @@ class _TodayItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: () => context.push('/orders/${order.orderId}'),
+          onTap: () => openOrderDetail(context, '/orders/${order.orderId}'),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(

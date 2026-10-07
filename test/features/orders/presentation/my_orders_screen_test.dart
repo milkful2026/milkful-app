@@ -273,4 +273,31 @@ void main() {
     );
     expect(amount.style?.decoration, TextDecoration.lineThrough);
   });
+
+  group('MA-155: returning from a detail screen', () {
+    setUp(() {
+      orders.pages = {
+        null: OrdersPage(items: [testOrder('ord_1', deliveryDate: _d(1))]),
+      };
+    });
+
+    testWidgets('closing with true (a cancel happened) reloads the list', (tester) async {
+      await pump(tester);
+      expect(orders.listCursors, [null]);
+      await tester.tap(find.byKey(const Key('orders.row.ord_1')));
+      await tester.pumpAndSettle();
+      GoRouter.of(tester.element(find.textContaining('stub'))).pop(true);
+      await tester.pumpAndSettle();
+      expect(orders.listCursors, [null, null]);
+    });
+
+    testWidgets('a plain back costs no request', (tester) async {
+      await pump(tester);
+      await tester.tap(find.byKey(const Key('orders.row.ord_1')));
+      await tester.pumpAndSettle();
+      GoRouter.of(tester.element(find.textContaining('stub'))).pop();
+      await tester.pumpAndSettle();
+      expect(orders.listCursors, [null]);
+    });
+  });
 }

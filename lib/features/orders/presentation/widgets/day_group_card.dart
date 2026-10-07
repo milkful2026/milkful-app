@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/money.dart';
 import '../../../catalog/models/product.dart';
@@ -8,6 +7,7 @@ import '../../domain/order_status_copy.dart';
 import '../../models/order_entry.dart';
 import '../../models/order_summary.dart';
 import '../order_formatting.dart';
+import 'open_order_detail.dart';
 import 'product_thumb.dart';
 import 'status_chip.dart';
 
@@ -99,7 +99,7 @@ class EntryRow extends StatelessWidget {
     return InkWell(
       key: key,
       borderRadius: BorderRadius.circular(16),
-      onTap: () => context.push(location, extra: extra),
+      onTap: () => openOrderDetail(context, location, extra: extra),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
         child: Padding(
