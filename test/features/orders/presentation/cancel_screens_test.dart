@@ -375,7 +375,9 @@ void main() {
       final order = testOrder('ord_9', deliveryDate: _delivery, subscriptionId: 'sub_1');
       orders.pages = {null: OrdersPage(items: [order])};
       orders.byId['ord_9'] = order;
-      await pump(tester, '/orders/scheduled/sub_1', extra: entry);
+      final closed = await pump(tester, '/orders/scheduled/sub_1', extra: entry);
+      Object? closedWith; // not awaited: a regression would hang, not fail
+      closed.then((v) => closedWith = v);
       await tester.tap(find.byKey(const Key('scheduled.cancel')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('cancelDelivery.confirm')));
@@ -393,6 +395,50 @@ void main() {
       await tester.tap(find.text('View order'));
       await tester.pumpAndSettle();
       expect(find.text('Order Placed'), findsOneWidget); // now on /orders/ord_9
+
+      // Back from the order also closes the scheduled screen with true, so
+      // My Orders reloads (pushReplacement would leave `closed` pending).
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('stub /start'), findsOneWidget);
+      expect(closedWith, isTrue);
+    });
+
+    testWidgets('View order, then cancel the order: My Orders still reloads', (tester) async {
+      subs.actionException = const ApiException(
+        errorCode: 'CUTOFF_PASSED',
+        message: 'processed',
+        statusCode: 409,
+      );
+      subs.subscriptions = [sub(DateTime(2026, 10, 4))];
+      final order = testOrder(
+        'ord_9',
+        deliveryDate: _delivery,
+        subscriptionId: 'sub_1',
+        cancellableUntil: _cutoff,
+      );
+      orders.pages = {null: OrdersPage(items: [order])};
+      orders.byId['ord_9'] = order;
+      orders.cancelResult = _cancelled(RefundState.refunded);
+      final closed = await pump(tester, '/orders/scheduled/sub_1', extra: entry);
+      Object? closedWith; // not awaited: a regression would hang, not fail
+      closed.then((v) => closedWith = v);
+      await tester.tap(find.byKey(const Key('scheduled.cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('cancelDelivery.confirm')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View order'));
+      await tester.pumpAndSettle();
+
+      await openSheet(tester);
+      await tester.tap(find.byKey(const Key('cancelOrder.confirm')));
+      await tester.pumpAndSettle();
+      expect(orders.cancelCalls, hasLength(1));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.text('stub /start'), findsOneWidget);
+      expect(closedWith, isTrue);
     });
 
     testWidgets('a failed skip keeps the screen', (tester) async {

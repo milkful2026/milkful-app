@@ -59,7 +59,7 @@ class ScheduledDeliveryScreen extends StatelessWidget {
                     content: const Text('This delivery is now an order.'),
                     action: SnackBarAction(
                       label: 'View order',
-                      onPressed: () => context.pushReplacement('/orders/$orderId'),
+                      onPressed: () => _viewOrder(context, GoRouter.of(context), orderId),
                     ),
                   ),
                 );
@@ -182,7 +182,7 @@ class ScheduledDeliveryScreen extends StatelessWidget {
     final viewOrder = switch (state) {
       ScheduledDeliveryLoaded(change: BecameOrder(:final orderId)) => SnackBarAction(
         label: 'View order',
-        onPressed: () => router.pushReplacement('/orders/$orderId'),
+        onPressed: () => _viewOrder(context, router, orderId),
       ),
       _ => null,
     };
@@ -231,6 +231,22 @@ class ScheduledDeliveryScreen extends StatelessWidget {
       caption:
           'Final price (including any tax and delivery fee) is confirmed the evening before.',
     );
+  }
+}
+
+/// View order, for a delivery that became an order. Not `pushReplacement`:
+/// go_router drops the replaced route without completing its future, so My
+/// Orders' `openOrderDetail` would never hear about a cancel made on the
+/// order. Instead push the order, and once it closes, close this screen with
+/// `true`: the delivery is an order now, so My Orders reloads either way.
+Future<void> _viewOrder(BuildContext context, GoRouter router, String orderId) async {
+  await router.push<bool>('/orders/$orderId');
+  // Left some other way (e.g. Shop for tomorrow): nothing to close.
+  if (!context.mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) return;
+  if (router.canPop()) {
+    router.pop(true);
+  } else {
+    router.go('/orders');
   }
 }
 
