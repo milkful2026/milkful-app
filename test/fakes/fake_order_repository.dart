@@ -27,6 +27,13 @@ class FakeOrderRepository implements OrderRepository {
   final List<String?> listCursors = [];
   final List<String> getCalls = [];
 
+  /// MA-155 — `cancel` returns [cancelResult] (or throws [cancelException]);
+  /// [cancelGate] holds it open so a test can see the in-flight state.
+  OrderSummary? cancelResult;
+  Object? cancelException;
+  Completer<void>? cancelGate;
+  final List<(String, CancelReason?)> cancelCalls = [];
+
   @override
   Future<OrdersPage> listMine({String? cursor, int limit = 50}) async {
     listCursors.add(cursor);
@@ -54,6 +61,18 @@ class FakeOrderRepository implements OrderRepository {
     }
     return order;
   }
+
+  @override
+  Future<OrderSummary> cancel(String orderId, {CancelReason? reason}) async {
+    cancelCalls.add((orderId, reason));
+    if (cancelGate != null) await cancelGate!.future;
+    if (cancelException != null) throw cancelException!;
+    final result = cancelResult;
+    if (result == null) throw StateError('FakeOrderRepository.cancelResult not set');
+    // Later reads see the cancelled order, as they would from the server.
+    byId[orderId] = result;
+    return result;
+  }
 }
 
 OrderSummary testOrder(
@@ -66,6 +85,9 @@ OrderSummary testOrder(
   String? subscriptionId,
   String? failureReason,
   DateTime? createdAt,
+  DateTime? cancellableUntil,
+  CancelReason? cancelReason,
+  RefundState? refundState,
 }) => OrderSummary(
   orderId: id,
   source: source,
@@ -76,4 +98,7 @@ OrderSummary testOrder(
   subscriptionId: subscriptionId,
   failureReason: failureReason,
   createdAt: createdAt,
+  cancellableUntil: cancellableUntil,
+  cancelReason: cancelReason,
+  refundState: refundState,
 );

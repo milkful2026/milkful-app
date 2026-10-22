@@ -447,6 +447,31 @@ void main() {
       await tester.tap(find.text('View order'));
       await tester.pumpAndSettle();
       expect(find.text('Order Placed'), findsOneWidget); // now on /orders/ord_9
+
+      // Back from the order skips the stale scheduled screen.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('stub /start'), findsOneWidget);
+      expect(find.text('SCHEDULED DELIVERY'), findsNothing);
+    });
+
+    testWidgets('deep-linked, View order then back goes to /orders', (tester) async {
+      subs.subscriptions = [sub(_d(3))];
+      orders.pages = {
+        null: OrdersPage(
+          items: [testOrder('ord_9', deliveryDate: _d(2), subscriptionId: 'sub_1')],
+        ),
+      };
+      orders.byId['ord_9'] = testOrder('ord_9', deliveryDate: _d(2), subscriptionId: 'sub_1');
+      await pump(tester, '/orders/scheduled/sub_1', extra: entry, deepLink: true);
+
+      await tester.fling(find.byType(ListView), const Offset(0, 1500), 1000);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View order'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(visited.last, '/orders');
     });
 
     testWidgets('deep-linked and no longer scheduled: Back to My Orders goes to /orders', (
